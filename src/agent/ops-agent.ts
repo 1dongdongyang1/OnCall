@@ -4,6 +4,7 @@ import type { DiskInspectionSource } from "../data-sources/disk-inspection-sourc
 import type { SopSource } from "../data-sources/sop-source.js";
 import { createGetDiskUsageTool } from "../tools/inspect-disk.js";
 import { createListLargeDirectoriesTool } from "../tools/inspect-directory.js";
+import { createInspectFileTool } from "../tools/inspect-file.js";
 import { createSearchSopTool } from "../tools/search-sop.js";
 import { OPS_SYSTEM_PROMPT } from "./system-prompt.js";
 
@@ -25,6 +26,7 @@ export function createOpsAgent({
         createSearchSopTool(sopSource),
         createGetDiskUsageTool(diskInspectionSource),
         createListLargeDirectoriesTool(diskInspectionSource),
+        createInspectFileTool(diskInspectionSource),
       ],
     },
   });

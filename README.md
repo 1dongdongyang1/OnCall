@@ -13,14 +13,17 @@ node-01 磁盘使用率 > 90%
   → get_disk_usage(node-01)：/=95%
   → list_large_directories(node-01, "/")：/var=72G
   → list_large_directories(node-01, "/var")：/var/log=65G
-  → 判断日志异常增长，需要进一步确认日志类型
+  → list_large_directories(node-01, "/var/log")：app.log=61G
+  → inspect_file(node-01, "/var/log/app.log")：确认文件仍在写入
+  → search_sop("磁盘使用率过高")
+  → 输出证据、判断、待确认事项和安全处置建议
 ```
 
 ## 当前能力
 
 - 使用 `deepseek-v4-flash` 进行真实模型推理。
 - 使用 `@earendil-works/pi-agent-core` 管理 Agent 循环和工具调用。
-- 提供只读的 `search_sop`、`get_disk_usage` 和 `list_large_directories` 工具。
+- 提供只读的 `search_sop`、`get_disk_usage`、`list_large_directories` 和 `inspect_file` 工具。
 - 磁盘工具通过数据源接口获取结果，当前注入按节点组织的独立 Mock 数据源。
 - `search_sop` 当前读取 `sops/*.md` 并按文档元数据中的关键词匹配。
 - 支持 GPU Xid 79 和 GPU 温度过高两份 Markdown SOP。
@@ -74,10 +77,10 @@ npm ci
 npm start -- "GPU 报错 Xid 79，应该怎么处理？"
 ```
 
-运行首个磁盘告警事件：
+手工运行首个磁盘告警事件（真实模型 + Mock DataSource）：
 
 ```powershell
-npm start -- "节点 node-01 告警：磁盘使用率超过 90%，请定位原因"
+npm start -- "node-01 根分区磁盘使用率超过90%，请排查并说明处理建议。"
 ```
 
 成功调用工具时，终端会输出类似记录：
@@ -90,10 +93,27 @@ npm start -- "节点 node-01 告警：磁盘使用率超过 90%，请定位原�
 
 ## 验证与构建
 
-执行类型检查：
+测试分为两层：
+
+- DataSource 层测试：只运行固定 Mock，不调用大模型、不产生 API 费用；默认 `npm test` 会运行这一层。
+- Agent 集成测试：注入同一个 Mock DataSource，但运行真实 DeepSeek，验证工具名、参数、调用顺序、`isError` 和最终回答结构；需要显式运行。
+
+执行默认测试（类型检查 + DataSource Mock）：
 
 ```powershell
 npm test
+```
+
+只运行 DataSource Mock 测试：
+
+```powershell
+npm run test:data-source
+```
+
+显式运行第一个真实模型验收场景：
+
+```powershell
+npm run test:agent:acceptance
 ```
 
 编译并运行 JavaScript 产物：
@@ -113,6 +133,7 @@ OnCall/
 │  │  └─ system-prompt.ts      # OnCall Agent 系统提示词
 │  ├─ data-sources/
 │  │  ├─ disk-inspection-source.ts # 磁盘数据源接口和返回类型
+│  │  ├─ disk-inspection-source.test.ts # DataSource Mock 测试
 │  │  ├─ markdown-sop-source.ts     # Markdown 加载、解析和关键词检索
 │  │  └─ sop-source.ts             # SOP 数据源接口和返回类型
 │  ├─ mocks/
@@ -120,12 +141,14 @@ OnCall/
 │  ├─ tools/
 │  │  ├─ search-sop.ts         # SOP Tool 与数据源调用
 │  │  ├─ inspect-disk.ts       # 磁盘使用率 Tool 与数据源调用
-│  │  └─ inspect-directory.ts  # 大目录 Tool 与数据源调用
+│  │  ├─ inspect-directory.ts  # 大目录 Tool 与数据源调用
+│  │  └─ inspect-file.ts       # 具体文件只读检查 Tool
 │  ├─ rag/
 │  │  ├─ retriever.ts          # 规划中：SOP 检索接口
 │  │  └─ embedder.ts           # 规划中：文本向量化接口
 │  └─ index.ts                 # CLI 启动、环境检查和事件输出
 ├─ sops/                       # Markdown SOP 文档
+│  ├─ disk-usage-high.md
 │  ├─ gpu-overheat.md
 │  └─ gpu-xid-79.md
 ├─ .env.example                # 环境变量模板

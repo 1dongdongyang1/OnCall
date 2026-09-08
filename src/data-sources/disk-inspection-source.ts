@@ -15,11 +15,22 @@ export type DirectoryUsage = {
   entries: Array<{
     path: string;
     sizeGb: number;
+    kind: "directory" | "file";
     inspectable: boolean;
   }>;
+};
+
+export type FileInspection = {
+  node: string;
+  path: string;
+  sizeGb: number;
+  owner: string;
+  modifiedAt: string;
+  observations: string[];
 };
 
 export interface DiskInspectionSource {
   getDiskUsage(node: string): Promise<DiskUsage>;
   listLargeDirectories(node: string, path: string): Promise<DirectoryUsage>;
+  inspectFile(node: string, path: string): Promise<FileInspection>;
 }
