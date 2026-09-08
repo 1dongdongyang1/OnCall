@@ -2,7 +2,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { MarkdownSopSource } from "../data-sources/markdown-sop-source.js";
 import type { SopSource } from "../data-sources/sop-source.js";
-import { buildLocalVectorIndex, LocalVectorSopSource } from "./local-vector-index.js";
+import { HuggingFaceEmbedder } from "./embedder.js";
+import {
+  buildLocalEmbeddingIndex,
+  LocalEmbeddingSopSource,
+} from "./local-embedding-index.js";
+import {
+  buildLocalTfidfIndex,
+  LocalTfidfSopSource,
+} from "./local-tfidf-index.js";
 
 type EvaluationCase = {
   id: string;
@@ -75,21 +83,33 @@ async function printRankings(
 }
 
 const sopDirectory = resolve("sops");
-const indexPath = resolve(".rag-index", "sop-vector-index.json");
+const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
+const embeddingIndexPath = resolve(".rag-index", "sop-embedding-index.json");
 const cases = JSON.parse(
   await readFile(resolve("src", "rag", "retrieval-eval-cases.json"), "utf8"),
 ) as EvaluationCase[];
 
-await buildLocalVectorIndex(sopDirectory, indexPath);
+await buildLocalTfidfIndex(sopDirectory, tfidfIndexPath);
+const embedder = new HuggingFaceEmbedder();
+await buildLocalEmbeddingIndex(sopDirectory, embeddingIndexPath, embedder);
 const keywordSource = new MarkdownSopSource(sopDirectory);
-const vectorSource = new LocalVectorSopSource(indexPath);
+const tfidfSource = new LocalTfidfSopSource(tfidfIndexPath);
+const embeddingSource = new LocalEmbeddingSopSource(embeddingIndexPath, embedder);
 const keywordMetrics = await evaluate(keywordSource, cases);
-const vectorMetrics = await evaluate(vectorSource, cases);
+const tfidfMetrics = await evaluate(tfidfSource, cases);
+const embeddingMetrics = await evaluate(embeddingSource, cases);
 
 printMetrics("Keyword Retrieval", keywordMetrics);
-printMetrics("Vector Retrieval", vectorMetrics);
+printMetrics("TF-IDF Retrieval", tfidfMetrics);
+printMetrics("Embedding Retrieval", embeddingMetrics);
 
 if (process.argv.includes("--details")) {
   await printRankings("Keyword Retrieval", keywordSource, cases);
-  await printRankings("Vector Retrieval", vectorSource, cases);
+  await printRankings("TF-IDF Retrieval", tfidfSource, cases);
+  await printRankings("Embedding Retrieval", embeddingSource, cases);
+  await printRankings(
+    "Embedding Retrieval raw scores",
+    new LocalEmbeddingSopSource(embeddingIndexPath, embedder, -1),
+    cases,
+  );
 }

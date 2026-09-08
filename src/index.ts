@@ -2,8 +2,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { createOpsAgent } from "./agent/ops-agent.js";
-import { MarkdownSopSource } from "./data-sources/markdown-sop-source.js";
 import { mockDiskInspectionSource } from "./mocks/mock-disk-inspection-source.js";
+import {
+  buildLocalTfidfIndex,
+  LocalTfidfSopSource,
+} from "./rag/local-tfidf-index.js";
 
 const prompt = process.argv.slice(2).join(" ") || "你好，请介绍一下自己。";
 
@@ -17,9 +20,12 @@ if (!process.env.DEEPSEEK_API_KEY) {
   );
 }
 
+const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
+await buildLocalTfidfIndex(resolve("sops"), tfidfIndexPath);
+
 const agent = createOpsAgent({
   diskInspectionSource: mockDiskInspectionSource,
-  sopSource: new MarkdownSopSource(resolve("sops")),
+  sopSource: new LocalTfidfSopSource(tfidfIndexPath),
 });
 
 let toolCallCount = 0;

@@ -26,8 +26,9 @@ node-01 磁盘使用率 > 90%
 - 提供只读的 `search_sop`、`get_disk_usage`、`list_large_directories` 和 `inspect_file` 工具。
 - 磁盘工具通过数据源接口获取结果，当前注入按节点组织的独立 Mock 数据源。
 - `search_sop` 使用统一 Top-K 接口，第一版默认返回 Top-3。
-- 提供关键词基线和本地 TF-IDF 向量索引；向量索引以 JSON 保存文档元数据，并可从 SOP 目录重复构建。
-- 提供包含预期文档、预期证据和判定规则的检索评测集，可比较两种检索的 Recall@K 与 no-match accuracy。
+- Agent 已使用本地 TF-IDF 检索 SOP；索引以 JSON 保存文档元数据，并在启动时从当前 SOP 可重复构建。
+- 提供真正的多语言 Embedding 模型实现，以本地 JSON 保存模型向量并使用余弦相似度检索。
+- 提供包含预期文档、预期证据和判定规则的检索评测集，可比较 Keyword、TF-IDF、Embedding 三种检索的 Recall@K 与 no-match accuracy。
 - 支持 GPU Xid 79 和 GPU 温度过高两份 Markdown SOP。
 - 支持磁盘根分区使用率过高的首个固定诊断事件。
 - 输出工具名、调用参数、执行结果和调用次数，便于验证 Tool Calling。
@@ -36,10 +37,10 @@ node-01 磁盘使用率 > 90%
 ## 当前边界
 
 - 程序入口目前为机器检查工具注入 Mock 数据源，不会读取真实节点。
-- Agent 运行入口当前仍注入关键词检索；本地向量检索已用于离线对比评测，尚未切换为生产入口。
+- Agent 运行入口当前注入 TF-IDF 检索；Embedding 检索先保留为离线对比项，尚未切换到 Agent，也未增加混合检索或重排。
 - 当前只输出诊断与处置建议，不会执行重启、隔离节点等变更操作。
 - 尚未接入监控告警、CMDB、工单系统或会话持久化。
-- `npm test` 当前只做 TypeScript 类型检查，不会自动发起付费模型请求。
+- `npm test` 运行类型检查、DataSource Mock 和离线检索测试，不会调用真实大模型或下载 Embedding 模型。
 
 ## 技术组成
 
@@ -101,7 +102,7 @@ npm start -- "node-01 根分区磁盘使用率超过90%，请排查并说明处�
 - 检索测试与评测：验证 Top-K、元数据和索引可重复构建，并从评测集实际计算检索指标；不调用大模型。
 - Agent 集成测试：注入同一个 Mock DataSource，但运行真实 DeepSeek，验证关键诊断行为、工具错误、安全边界和最终回答，不锁死完整调用路线；需要显式运行。
 
-执行默认测试（类型检查 + DataSource Mock）：
+执行默认测试（类型检查 + DataSource Mock + 离线检索测试）：
 
 ```powershell
 npm test
@@ -113,7 +114,14 @@ npm test
 npm run test:data-source
 ```
 
-运行检索评测。命令会先从当前 `sops/` 重建本地索引，再分别计算关键词与向量检索指标；README 不保存预计算结果：
+分别构建 TF-IDF 或 Embedding 本地索引：
+
+```powershell
+npm run build:rag-index
+npm run build:embedding-index
+```
+
+运行检索评测。命令会从当前 `sops/` 重建 TF-IDF 与 Embedding 本地索引，再分别计算 Keyword、TF-IDF、Embedding 指标；README 不保存预计算结果。首次运行会下载并缓存固定 revision 的多语言 Embedding 模型：
 
 ```powershell
 npm run eval:retrieval
@@ -160,10 +168,13 @@ OnCall/
 │  │  └─ inspect-file.ts       # 具体文件只读检查 Tool
 │  ├─ rag/
 │  │  ├─ retriever.ts          # 通用 Top-K 检索结果契约
-│  │  ├─ local-vector-index.ts # 可重复构建的本地 TF-IDF JSON 索引
-│  │  ├─ build-vector-index.ts # 单独构建索引的命令入口
+│  │  ├─ embedder.ts           # Embedder 抽象与多语言模型实现
+│  │  ├─ local-tfidf-index.ts  # 可重复构建的本地 TF-IDF JSON 索引
+│  │  ├─ local-embedding-index.ts # Embedding JSON 索引与余弦检索
+│  │  ├─ build-tfidf-index.ts  # 单独构建 TF-IDF 索引
+│  │  ├─ build-embedding-index.ts # 单独构建 Embedding 索引
 │  │  ├─ retrieval-eval-cases.json # 检索评测集与判定规则
-│  │  ├─ evaluate-retrieval.ts # 关键词/向量 Recall@K 评测
+│  │  ├─ evaluate-retrieval.ts # 三种检索的 Recall@K 评测
 │  │  └─ retrieval.test.ts     # Top-K、元数据与重复构建测试
 │  └─ index.ts                 # CLI 启动、环境检查和事件输出
 ├─ sops/                       # Markdown SOP 文档
@@ -176,4 +187,4 @@ OnCall/
 └─ tsconfig.json               # TypeScript 配置
 ```
 
-`src/index.ts` 是当前组合入口：它把按节点组织的 Mock 磁盘数据源和关键词版 `MarkdownSopSource` 注入 Agent。后续接入真实机器时，实现 `DiskInspectionSource` 并替换注入对象；切换向量检索时，可用实现了相同 Top-K `SopSource` 接口的 `LocalVectorSopSource` 替换关键词实现，工具名称和 Agent 组装逻辑不需要重写。
+`src/index.ts` 是当前组合入口：它把按节点组织的 Mock 磁盘数据源和 `LocalTfidfSopSource` 注入 Agent。后续接入真实机器时，实现 `DiskInspectionSource` 并替换注入对象；若评测证明需要切换 Embedding 或混合检索，只需替换统一 Top-K `SopSource` 的注入，工具名称和 Agent 组装逻辑不需要重写。

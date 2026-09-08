@@ -3,8 +3,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import test from "node:test";
-import { MarkdownSopSource } from "../data-sources/markdown-sop-source.js";
 import { mockDiskInspectionSource } from "../mocks/mock-disk-inspection-source.js";
+import {
+  buildLocalTfidfIndex,
+  LocalTfidfSopSource,
+} from "../rag/local-tfidf-index.js";
 import { createOpsAgent } from "./ops-agent.js";
 
 type ToolCallRecord = { name: string; args: unknown };
@@ -19,12 +22,14 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
     "Agent 集成测试需要在 .env 中配置 DEEPSEEK_API_KEY",
   );
 
+  const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
+  await buildLocalTfidfIndex(resolve("sops"), tfidfIndexPath);
   const agent = createOpsAgent({
     diskInspectionSource: mockDiskInspectionSource,
-    sopSource: new MarkdownSopSource(resolve("sops")),
+    sopSource: new LocalTfidfSopSource(tfidfIndexPath),
   });
   const calls: ToolCallRecord[] = [];
-  const results: Array<{ name: string; isError: boolean }> = [];
+  const results: Array<{ name: string; isError: boolean; result: unknown }> = [];
   let answer = "";
 
   agent.subscribe((event) => {
@@ -32,7 +37,11 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
       calls.push({ name: event.toolName, args: event.args });
     }
     if (event.type === "tool_execution_end") {
-      results.push({ name: event.toolName, isError: event.isError });
+      results.push({
+        name: event.toolName,
+        isError: event.isError,
+        result: event.result,
+      });
     }
     if (
       event.type === "message_update" &&
@@ -113,6 +122,8 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   );
   assert.equal(results.length, calls.length);
   assert.ok(results.every((result) => !result.isError));
+  const sopResult = results.find((result) => result.name === "search_sop");
+  assert.match(JSON.stringify(sopResult?.result), /SOP-DISK-USAGE-HIGH/);
   assert.match(answer, /证据/);
   assert.match(answer, /判断/);
   assert.match(answer, /待确认事项/);
@@ -127,7 +138,9 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
 
   process.stdout.write(
     `\n[acceptance-tool-calls] ${JSON.stringify(calls)}\n` +
-      `[acceptance-tool-results] ${JSON.stringify(results)}\n` +
+      `[acceptance-tool-results] ${JSON.stringify(
+        results.map(({ name, isError }) => ({ name, isError })),
+      )}\n` +
       `[acceptance-final-answer]\n${answer}\n`,
   );
 });

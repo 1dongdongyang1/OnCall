@@ -17,8 +17,9 @@
 - `npm run test:data-source`：只运行 DataSource 层 Mock 测试。
 - `npm run test:retrieval`：验证 Top-K、文档元数据和索引可重复构建。
 - `npm run test:agent:acceptance`：使用真实 DeepSeek 运行 Agent 集成验收，可能产生 API 费用。
-- `npm run build:rag-index`：从当前 `sops/` 可重复构建本地 JSON 向量索引。
-- `npm run eval:retrieval`：重建索引并实际计算关键词与向量检索的 Recall@1、Recall@3 和 No-match accuracy。
+- `npm run build:rag-index`：从当前 `sops/` 可重复构建本地 TF-IDF JSON 索引。
+- `npm run build:embedding-index`：调用真实 Embedding 模型并构建本地向量索引。
+- `npm run eval:retrieval`：重建索引并实际比较 Keyword、TF-IDF、Embedding 的 Recall@1、Recall@3 和 No-match accuracy。
 - `npm run build`：把 `src/` 编译到 `dist/`。
 - `node dist/index.js "prompt"`：运行编译后的程序。
 
@@ -40,9 +41,9 @@
 
 Agent 验收应验证关键行为和安全约束，不得锁死模型的完整思考路线或固定整段调用数组。至少核对：工具名与参数、节点边界、必要证据、因果前置条件、重复调用、调用预算、`isError`、工具返回证据和最终回答。不能把看似合理的模型文字当作工具已经执行的证明。
 
-检索评测集中的每条正样本必须包含查询、预期文档、预期证据和明确判定规则；no-match 样本必须明确预期返回空结果。关键词基线和向量检索必须使用同一语料与同一评测集。Recall@K 和 No-match accuracy 必须由评测命令现场计算，禁止把预设数值或历史结果写进 README。
+检索评测集中的每条正样本必须包含查询、预期文档、预期证据和明确判定规则；no-match 样本必须明确预期返回空结果。Keyword、TF-IDF 和 Embedding 检索必须使用同一语料与同一评测集。Recall@K 和 No-match accuracy 必须由评测命令现场计算，禁止把预设数值或历史结果写进 README。
 
-本地向量索引必须保留文档的 `id`、`title`、`keywords`、`steps` 和 `sourcePath`，并保证相同语料可以重复构建出一致索引。第一版默认 Top-3；修改分词、权重或拒识阈值时，必须同时观察 Recall@1、Recall@3 和 No-match accuracy，不能只优化单一指标。
+本地索引必须保留文档的 `id`、`title`、`keywords`、`steps` 和 `sourcePath`。TF-IDF 索引要保证相同语料可以重复构建出一致结果；Embedding 索引还必须记录模型 ID、固定 revision 和向量维度。第一版默认 Top-3；修改分词、模型、权重或拒识阈值时，必须同时观察 Recall@1、Recall@3 和 No-match accuracy，不能只优化单一指标。
 
 ## 提交与 Pull Request
 

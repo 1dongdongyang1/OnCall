@@ -3,12 +3,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Sop, SopSearchResult, SopSource } from "../data-sources/sop-source.js";
 import { loadSopDocuments } from "../data-sources/markdown-sop-source.js";
+import { sopDocumentContent } from "./sop-document-content.js";
 
 type IndexedDocument = Sop & { vector: number[] };
 
 const STOP_TOKENS = new Set(["如何", "怎么", "应该", "处理", "需要", "持续"]);
 
-export type LocalVectorIndex = {
+export type LocalTfidfIndex = {
   formatVersion: 1;
   corpusHash: string;
   vocabulary: string[];
@@ -42,15 +43,6 @@ function tokenize(text: string): string[] {
   return tokens.filter((token) => !STOP_TOKENS.has(token));
 }
 
-function documentText(document: Sop): string {
-  return [
-    document.id,
-    document.title,
-    document.keywords.join(" "),
-    document.steps.join(" "),
-  ].join("\n");
-}
-
 function createVector(tokens: string[], vocabulary: string[], idf: number[]): number[] {
   const counts = new Map<string, number>();
   for (const token of tokens) {
@@ -66,12 +58,12 @@ function cosineSimilarity(left: number[], right: number[]): number {
   return left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
 }
 
-export async function buildLocalVectorIndex(
+export async function buildLocalTfidfIndex(
   sopDirectory: string,
   indexPath: string,
-): Promise<LocalVectorIndex> {
+): Promise<LocalTfidfIndex> {
   const documents = await loadSopDocuments(sopDirectory);
-  const tokenSets = documents.map((document) => tokenize(documentText(document)));
+  const tokenSets = documents.map((document) => tokenize(sopDocumentContent(document)));
   const vocabulary = [...new Set(tokenSets.flat())].sort();
   const idf = vocabulary.map((term) => {
     const documentFrequency = tokenSets.filter((tokens) => tokens.includes(term)).length;
@@ -80,7 +72,7 @@ export async function buildLocalVectorIndex(
   const corpusHash = createHash("sha256")
     .update(JSON.stringify(documents))
     .digest("hex");
-  const index: LocalVectorIndex = {
+  const index: LocalTfidfIndex = {
     formatVersion: 1,
     corpusHash,
     vocabulary,
@@ -96,17 +88,17 @@ export async function buildLocalVectorIndex(
   return index;
 }
 
-export class LocalVectorSopSource implements SopSource {
-  private index: LocalVectorIndex | undefined;
+export class LocalTfidfSopSource implements SopSource {
+  private index: LocalTfidfIndex | undefined;
 
   constructor(
     private readonly indexPath: string,
     private readonly minimumScore = 0.04,
   ) {}
 
-  private async loadIndex(): Promise<LocalVectorIndex> {
+  private async loadIndex(): Promise<LocalTfidfIndex> {
     if (!this.index) {
-      this.index = JSON.parse(await readFile(this.indexPath, "utf8")) as LocalVectorIndex;
+      this.index = JSON.parse(await readFile(this.indexPath, "utf8")) as LocalTfidfIndex;
     }
     return this.index;
   }

@@ -12,7 +12,8 @@
     "test:data-source": "node --import tsx --test src/data-sources/disk-inspection-source.test.ts",
     "test:retrieval": "node --import tsx --test src/rag/retrieval.test.ts",
     "test:agent:acceptance": "node --import tsx --test src/agent/ops-agent.acceptance.test.ts",
-    "build:rag-index": "tsx src/rag/build-vector-index.ts",
+    "build:rag-index": "tsx src/rag/build-tfidf-index.ts",
+    "build:embedding-index": "tsx src/rag/build-embedding-index.ts",
     "eval:retrieval": "tsx src/rag/evaluate-retrieval.ts"
   },
   "keywords": [],
@@ -21,6 +22,7 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.74.2",
     "@earendil-works/pi-ai": "^0.74.2",
+    "@huggingface/transformers": "^4.2.0",
     "typebox": "^1.3.28"
   },
   "devDependencies": {
