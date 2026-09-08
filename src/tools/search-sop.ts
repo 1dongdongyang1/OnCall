@@ -11,7 +11,7 @@ const parameters = Type.Object({
 
 export function createSearchSopTool(
   source: SopSource,
-): AgentTool<typeof parameters, { sopId: string | null }> {
+): AgentTool<typeof parameters, { sopIds: string[] }> {
   return {
     name: "search_sop",
     label: "Search SOP",
@@ -20,9 +20,9 @@ export function createSearchSopTool(
     parameters,
     executionMode: "sequential",
     execute: async (_toolCallId, { query }) => {
-      const match = await source.findByQuery(query);
+      const matches = await source.search(query, 3);
 
-      if (!match) {
+      if (!matches.length) {
         return {
           content: [
             {
@@ -30,7 +30,7 @@ export function createSearchSopTool(
               text: JSON.stringify({ found: false, query }),
             },
           ],
-          details: { sopId: null },
+          details: { sopIds: [] },
         };
       }
 
@@ -38,15 +38,10 @@ export function createSearchSopTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify({
-              found: true,
-              id: match.id,
-              title: match.title,
-              steps: match.steps,
-            }),
+              text: JSON.stringify({ found: true, results: matches }),
           },
         ],
-        details: { sopId: match.id },
+        details: { sopIds: matches.map((match) => match.id) },
       };
     },
   };

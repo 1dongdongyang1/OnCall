@@ -1,10 +1,10 @@
-export interface RetrievedDocument {
+export interface RetrievedDocument<TMetadata = Record<string, unknown>> {
   id: string;
   content: string;
   score: number;
+  metadata: TMetadata;
 }
 
-/** Contract reserved for the future SOP retrieval implementation. */
 export interface Retriever {
   search(query: string, limit?: number): Promise<RetrievedDocument[]>;
 }

@@ -1,10 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Sop, SopSource } from "./sop-source.js";
-
-type IndexedSop = Sop & {
-  keywords: string[];
-};
+import type { Sop, SopSearchResult, SopSource } from "./sop-source.js";
 
 function readMetadata(frontmatter: string): Map<string, string> {
   return new Map(
@@ -21,7 +17,7 @@ function readMetadata(frontmatter: string): Map<string, string> {
   );
 }
 
-function parseSop(fileName: string, markdown: string): IndexedSop {
+export function parseSop(fileName: string, markdown: string): Sop {
   const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const titleMatch = markdown.match(/^#\s+(.+)$/m);
 
@@ -52,31 +48,42 @@ function parseSop(fileName: string, markdown: string): IndexedSop {
     title: titleMatch[1].trim(),
     keywords,
     steps,
+    sourcePath: fileName,
   };
+}
+
+export async function loadSopDocuments(directory: string): Promise<Sop[]> {
+  const fileNames = (await readdir(directory))
+    .filter((fileName) => fileName.endsWith(".md"))
+    .sort();
+
+  return Promise.all(
+    fileNames.map(async (fileName) =>
+      parseSop(fileName, await readFile(join(directory, fileName), "utf8")),
+    ),
+  );
 }
 
 export class MarkdownSopSource implements SopSource {
   constructor(private readonly directory: string) {}
 
-  async findByQuery(query: string): Promise<Sop | null> {
-    const fileNames = (await readdir(this.directory))
-      .filter((fileName) => fileName.endsWith(".md"))
-      .sort();
+  async search(query: string, limit = 3): Promise<SopSearchResult[]> {
     const normalizedQuery = query.toLowerCase();
+    const documents = await loadSopDocuments(this.directory);
 
-    for (const fileName of fileNames) {
-      const markdown = await readFile(join(this.directory, fileName), "utf8");
-      const sop = parseSop(fileName, markdown);
-
-      if (sop.keywords.some((keyword) => normalizedQuery.includes(keyword))) {
-        return {
-          id: sop.id,
-          title: sop.title,
-          steps: sop.steps,
-        };
-      }
-    }
-
-    return null;
+    return documents
+      .map((document): SopSearchResult => {
+        const matches = document.keywords.filter((keyword) =>
+          normalizedQuery.includes(keyword),
+        );
+        const score = matches.reduce(
+          (total, keyword) => total + 1 + keyword.length / 100,
+          0,
+        );
+        return { ...document, score };
+      })
+      .filter((document) => document.score > 0)
+      .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+      .slice(0, Math.max(0, limit));
   }
 }

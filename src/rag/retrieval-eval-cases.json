@@ -1,0 +1,86 @@
+[
+  {
+    "id": "disk-root-low-space",
+    "query": "根分区只剩少量空间，应该先确认哪些信息",
+    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
+    "expectedEvidence": "确认大文件所属业务、日志轮转策略、保留要求和业务影响。",
+    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+  },
+  {
+    "id": "disk-growing-log",
+    "query": "app.log 持续写入导致容量告警，如何安全处理",
+    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
+    "expectedEvidence": "禁止直接删除仍在写入的文件，按变更流程归档或清理。",
+    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+  },
+  {
+    "id": "disk-explicit-keyword",
+    "query": "磁盘使用率过高的处置步骤",
+    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
+    "expectedEvidence": "记录使用率和大文件证据，确认轮转与保留要求。",
+    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+  },
+  {
+    "id": "xid-pcie",
+    "query": "NVRM 报错，GPU 从 PCIe 总线掉线怎么留证",
+    "expectedDocumentIds": ["SOP-GPU-XID-79"],
+    "expectedEvidence": "采集 nvidia-smi、dmesg 和 PCIe 链路状态。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+  },
+  {
+    "id": "xid-fallen-off-bus",
+    "query": "fallen off the bus 应该如何处理",
+    "expectedDocumentIds": ["SOP-GPU-XID-79"],
+    "expectedEvidence": "迁移业务并保留证据后按变更流程重启。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+  },
+  {
+    "id": "xid-recurrence",
+    "query": "Xid79 重启后再次出现，需要升级给谁",
+    "expectedDocumentIds": ["SOP-GPU-XID-79"],
+    "expectedEvidence": "复现后隔离节点并升级给硬件团队。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+  },
+  {
+    "id": "gpu-temperature-rising",
+    "query": "GPU 温度持续上升，需要检查风扇和风道",
+    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
+    "expectedEvidence": "检查风扇、风道、环境温度和功耗限制。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+  },
+  {
+    "id": "gpu-environment-temperature",
+    "query": "机房环境温度和功耗限制应该怎么排查",
+    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
+    "expectedEvidence": "检查环境温度和功耗限制并持续采集温度。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+  },
+  {
+    "id": "gpu-overheat-explicit",
+    "query": "显卡过热后如何迁移负载",
+    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
+    "expectedEvidence": "降低或迁移当前负载。",
+    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+  },
+  {
+    "id": "no-match-database-replication",
+    "query": "数据库主从复制延迟如何处理",
+    "expectedDocumentIds": [],
+    "expectedEvidence": "当前语料没有数据库复制 SOP。",
+    "decisionRule": "Top-3 返回空结果才算正确拒识。"
+  },
+  {
+    "id": "no-match-certificate",
+    "query": "TLS 证书即将过期如何续签",
+    "expectedDocumentIds": [],
+    "expectedEvidence": "当前语料没有证书续签 SOP。",
+    "decisionRule": "Top-3 返回空结果才算正确拒识。"
+  },
+  {
+    "id": "no-match-kubernetes-image",
+    "query": "Kubernetes Pod ImagePullBackOff 如何处理",
+    "expectedDocumentIds": [],
+    "expectedEvidence": "当前语料没有 Kubernetes 镜像拉取 SOP。",
+    "decisionRule": "Top-3 返回空结果才算正确拒识。"
+  }
+]

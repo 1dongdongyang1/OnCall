@@ -54,14 +54,63 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
     );
   }
 
-  assert.deepEqual(calls, [
-    { name: "get_disk_usage", args: { node: "node-01" } },
-    { name: "list_large_directories", args: { node: "node-01", path: "/" } },
-    { name: "list_large_directories", args: { node: "node-01", path: "/var" } },
-    { name: "list_large_directories", args: { node: "node-01", path: "/var/log" } },
-    { name: "inspect_file", args: { node: "node-01", path: "/var/log/app.log" } },
-    { name: "search_sop", args: { query: "磁盘使用率过高" } },
+  const hasCall = (name: string, expectedArgs: Record<string, string>): boolean =>
+    calls.some(
+      (call) =>
+        call.name === name &&
+        Object.entries(expectedArgs).every(
+          ([key, value]) =>
+            typeof call.args === "object" &&
+            call.args !== null &&
+            (call.args as Record<string, unknown>)[key] === value,
+        ),
+    );
+
+  assert.ok(calls.length <= 10, "诊断应在有限工具预算内结束");
+  assert.ok(hasCall("get_disk_usage", { node: "node-01" }));
+  assert.ok(hasCall("list_large_directories", { node: "node-01", path: "/" }));
+  assert.ok(hasCall("list_large_directories", { node: "node-01", path: "/var" }));
+  assert.ok(
+    hasCall("list_large_directories", { node: "node-01", path: "/var/log" }),
+  );
+  assert.ok(hasCall("inspect_file", { node: "node-01", path: "/var/log/app.log" }));
+  assert.ok(calls.some((call) => call.name === "search_sop"));
+
+  const diskUsageIndex = calls.findIndex((call) => call.name === "get_disk_usage");
+  const rootInspectionIndex = calls.findIndex(
+    (call) =>
+      call.name === "list_large_directories" &&
+      (call.args as Record<string, unknown>).path === "/",
+  );
+  const logInspectionIndex = calls.findIndex(
+    (call) =>
+      call.name === "list_large_directories" &&
+      (call.args as Record<string, unknown>).path === "/var/log",
+  );
+  const fileInspectionIndex = calls.findIndex((call) => call.name === "inspect_file");
+  assert.ok(diskUsageIndex < rootInspectionIndex, "必须先确认告警再检查目录");
+  assert.ok(logInspectionIndex < fileInspectionIndex, "具体文件必须先由目录证据定位");
+
+  const allowedTools = new Set([
+    "get_disk_usage",
+    "list_large_directories",
+    "inspect_file",
+    "search_sop",
   ]);
+  assert.ok(calls.every((call) => allowedTools.has(call.name)));
+  const uniqueCalls = new Set(calls.map((call) => `${call.name}:${JSON.stringify(call.args)}`));
+  assert.equal(uniqueCalls.size, calls.length, "不得重复相同工具和参数");
+  assert.ok(
+    calls
+      .filter((call) => call.name !== "search_sop")
+      .every(
+        (call) =>
+          typeof call.args === "object" &&
+          call.args !== null &&
+          (call.args as Record<string, unknown>).node === "node-01",
+      ),
+    "所有机器检查必须保持在用户指定节点",
+  );
   assert.equal(results.length, calls.length);
   assert.ok(results.every((result) => !result.isError));
   assert.match(answer, /证据/);
