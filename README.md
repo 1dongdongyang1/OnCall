@@ -26,10 +26,12 @@ node-01 磁盘使用率 > 90%
 - 提供只读的 `search_sop`、`get_disk_usage`、`list_large_directories` 和 `inspect_file` 工具。
 - 磁盘工具通过数据源接口获取结果，当前注入按节点组织的独立 Mock 数据源。
 - `search_sop` 使用统一 Top-K 接口，第一版默认返回 Top-3。
-- Agent 已使用本地 TF-IDF 检索 SOP；索引以 JSON 保存文档元数据，并在启动时从当前 SOP 可重复构建。
-- 提供真正的多语言 Embedding 模型实现，以本地 JSON 保存模型向量并使用余弦相似度检索。
+- 所有 Markdown SOP 先经过同一套标题感知分块，生成统一 Chunk 数据；Keyword、TF-IDF、Embedding 三套索引只消费该数据。
+- Agent 已使用本地 TF-IDF 检索 SOP；索引以 JSON 保存 Chunk 元数据，并在启动时从当前 SOP 可重复构建。
+- 文档 ID 由顶级标题生成，Chunk ID 由文档 ID、标题路径和内容哈希生成，不依赖文件名或数组下标。
+- 提供真正的多语言 Embedding 模型实现，以本地 JSON 保存 Chunk 向量并使用余弦相似度检索。
 - 提供包含预期文档、预期证据和判定规则的检索评测集，可比较 Keyword、TF-IDF、Embedding 三种检索的 Recall@K 与 no-match accuracy。
-- 支持 GPU Xid 79 和 GPU 温度过高两份 Markdown SOP。
+- 当前语料包含 CPU、内存、磁盘、服务不可用和响应时间过长五类 Markdown SOP。
 - 支持磁盘根分区使用率过高的首个固定诊断事件。
 - 输出工具名、调用参数、执行结果和调用次数，便于验证 Tool Calling。
 - 通过 `.env` 管理 DeepSeek API Key。
@@ -114,14 +116,14 @@ npm test
 npm run test:data-source
 ```
 
-分别构建 TF-IDF 或 Embedding 本地索引：
+构建统一 Chunk 数据以及 Keyword、TF-IDF 索引，或基于同一 Chunk 数据构建 Embedding 索引：
 
 ```powershell
 npm run build:rag-index
 npm run build:embedding-index
 ```
 
-运行检索评测。命令会从当前 `sops/` 重建 TF-IDF 与 Embedding 本地索引，再分别计算 Keyword、TF-IDF、Embedding 指标；README 不保存预计算结果。首次运行会下载并缓存固定 revision 的多语言 Embedding 模型：
+运行检索评测。命令会先从当前 `sops/` 生成一份统一 Chunk 数据，再据此重建 Keyword、TF-IDF、Embedding 三套索引并计算指标；README 不保存预计算结果。首次运行会下载并缓存固定 revision 的多语言 Embedding 模型：
 
 ```powershell
 npm run eval:retrieval
@@ -157,7 +159,6 @@ OnCall/
 │  ├─ data-sources/
 │  │  ├─ disk-inspection-source.ts # 磁盘数据源接口和返回类型
 │  │  ├─ disk-inspection-source.test.ts # DataSource Mock 测试
-│  │  ├─ markdown-sop-source.ts     # Markdown 加载、解析和关键词检索
 │  │  └─ sop-source.ts             # SOP 数据源接口和返回类型
 │  ├─ mocks/
 │  │  ├─ mock-disk-inspection-source.ts # 首个磁盘事件的固定数据
@@ -168,7 +169,10 @@ OnCall/
 │  │  └─ inspect-file.ts       # 具体文件只读检查 Tool
 │  ├─ rag/
 │  │  ├─ retriever.ts          # 通用 Top-K 检索结果契约
+│  │  ├─ chunk-store.ts        # Markdown → 稳定 ID 的统一 Chunk 数据
+│  │  ├─ text-tokenizer.ts     # Keyword 与 TF-IDF 共用分词
 │  │  ├─ embedder.ts           # Embedder 抽象与多语言模型实现
+│  │  ├─ local-keyword-index.ts # Chunk 级关键词倒排索引
 │  │  ├─ local-tfidf-index.ts  # 可重复构建的本地 TF-IDF JSON 索引
 │  │  ├─ local-embedding-index.ts # Embedding JSON 索引与余弦检索
 │  │  ├─ build-tfidf-index.ts  # 单独构建 TF-IDF 索引
@@ -178,13 +182,15 @@ OnCall/
 │  │  └─ retrieval.test.ts     # Top-K、元数据与重复构建测试
 │  └─ index.ts                 # CLI 启动、环境检查和事件输出
 ├─ sops/                       # Markdown SOP 文档
-│  ├─ disk-usage-high.md
-│  ├─ gpu-overheat.md
-│  └─ gpu-xid-79.md
+│  ├─ cpu_high_usage.md
+│  ├─ disk_high_usage.md
+│  ├─ memory_high_usage.md
+│  ├─ service_unavailable.md
+│  └─ slow_response.md
 ├─ .env.example                # 环境变量模板
 ├─ .gitignore                  # Git 忽略规则
 ├─ package.json                # 依赖与命令
 └─ tsconfig.json               # TypeScript 配置
 ```
 
-`src/index.ts` 是当前组合入口：它把按节点组织的 Mock 磁盘数据源和 `LocalTfidfSopSource` 注入 Agent。后续接入真实机器时，实现 `DiskInspectionSource` 并替换注入对象；若评测证明需要切换 Embedding 或混合检索，只需替换统一 Top-K `SopSource` 的注入，工具名称和 Agent 组装逻辑不需要重写。
+`src/index.ts` 是当前组合入口：它先生成统一 Chunk 数据和 TF-IDF 索引，再把按节点组织的 Mock 磁盘数据源和 `LocalTfidfSopSource` 注入 Agent。后续接入真实机器时，实现 `DiskInspectionSource` 并替换注入对象；若评测证明需要切换 Embedding 或混合检索，只需替换统一 Top-K `SopSource` 的注入，工具名称和 Agent 组装逻辑不需要重写。

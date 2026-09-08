@@ -1,12 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { MarkdownSopSource } from "../data-sources/markdown-sop-source.js";
 import type { SopSource } from "../data-sources/sop-source.js";
+import { buildChunkStore } from "./chunk-store.js";
 import { HuggingFaceEmbedder } from "./embedder.js";
 import {
   buildLocalEmbeddingIndex,
   LocalEmbeddingSopSource,
 } from "./local-embedding-index.js";
+import {
+  buildLocalKeywordIndex,
+  LocalKeywordSopSource,
+} from "./local-keyword-index.js";
 import {
   buildLocalTfidfIndex,
   LocalTfidfSopSource,
@@ -31,7 +35,7 @@ async function evaluate(source: SopSource, cases: EvaluationCase[]): Promise<Met
 
   for (const item of positiveCases) {
     const results = await source.search(item.query, 3);
-    const ids = results.map((result) => result.id);
+    const ids = results.map((result) => result.documentId);
     recallAt1 += item.expectedDocumentIds.filter((id) => ids.slice(0, 1).includes(id)).length /
       item.expectedDocumentIds.length;
     recallAt3 += item.expectedDocumentIds.filter((id) => ids.includes(id)).length /
@@ -75,7 +79,10 @@ async function printRankings(
     const results = await source.search(item.query, 3);
     process.stdout.write(
       `${item.id}: ${results
-        .map((result) => `${result.id}=${result.score.toFixed(4)}`)
+        .map(
+          (result) =>
+            `${result.documentId}/${result.chunkId}=${result.score.toFixed(4)}`,
+        )
         .join(", ") || "NO_MATCH"}\n`,
     );
   }
@@ -83,16 +90,20 @@ async function printRankings(
 }
 
 const sopDirectory = resolve("sops");
+const chunkStorePath = resolve(".rag-index", "sop-chunks.json");
+const keywordIndexPath = resolve(".rag-index", "sop-keyword-index.json");
 const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
 const embeddingIndexPath = resolve(".rag-index", "sop-embedding-index.json");
 const cases = JSON.parse(
   await readFile(resolve("src", "rag", "retrieval-eval-cases.json"), "utf8"),
 ) as EvaluationCase[];
 
-await buildLocalTfidfIndex(sopDirectory, tfidfIndexPath);
+await buildChunkStore(sopDirectory, chunkStorePath);
+await buildLocalKeywordIndex(chunkStorePath, keywordIndexPath);
+await buildLocalTfidfIndex(chunkStorePath, tfidfIndexPath);
 const embedder = new HuggingFaceEmbedder();
-await buildLocalEmbeddingIndex(sopDirectory, embeddingIndexPath, embedder);
-const keywordSource = new MarkdownSopSource(sopDirectory);
+await buildLocalEmbeddingIndex(chunkStorePath, embeddingIndexPath, embedder);
+const keywordSource = new LocalKeywordSopSource(keywordIndexPath);
 const tfidfSource = new LocalTfidfSopSource(tfidfIndexPath);
 const embeddingSource = new LocalEmbeddingSopSource(embeddingIndexPath, embedder);
 const keywordMetrics = await evaluate(keywordSource, cases);

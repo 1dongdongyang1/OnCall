@@ -1,12 +1,13 @@
-export type Sop = {
-  id: string;
-  title: string;
-  keywords: string[];
-  steps: string[];
+export type SopSearchResult = {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
   sourcePath: string;
+  headingPath: string[];
+  content: string;
+  contentHash: string;
+  score: number;
 };
-
-export type SopSearchResult = Sop & { score: number };
 
 export interface SopSource {
   search(query: string, limit?: number): Promise<SopSearchResult[]>;

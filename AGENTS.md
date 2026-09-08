@@ -4,7 +4,7 @@
 
 应用代码位于 `src/`。`src/index.ts` 负责加载配置、创建 Agent 和输出运行事件。Agent 的组装代码放在 `src/agent/`：模型与工具注册维护在 `ops-agent.ts`，行为约束维护在 `system-prompt.ts`。
 
-工具实现放在 `src/tools/`，每个工具单独一个 kebab-case 文件，例如 `search-sop.ts`。外部数据访问契约放在 `src/data-sources/`，固定测试数据放在 `src/mocks/`。检索接口、本地向量索引、评测集与评测程序放在 `src/rag/`。SOP 原始文档放在 `sops/`。
+工具实现放在 `src/tools/`，每个工具单独一个 kebab-case 文件，例如 `search-sop.ts`。外部数据访问契约放在 `src/data-sources/`，固定测试数据放在 `src/mocks/`。统一 Chunk 构建、检索索引、评测集与评测程序放在 `src/rag/`。SOP 原始文档放在 `sops/`。
 
 测试文件采用 `*.test.ts`，放在被测模块附近。真实大模型的 Agent 验收测试采用 `*.acceptance.test.ts`，必须通过独立命令显式运行。`dist/` 和 `.rag-index/` 都是生成目录，不得手工编辑或提交。
 
@@ -17,8 +17,8 @@
 - `npm run test:data-source`：只运行 DataSource 层 Mock 测试。
 - `npm run test:retrieval`：验证 Top-K、文档元数据和索引可重复构建。
 - `npm run test:agent:acceptance`：使用真实 DeepSeek 运行 Agent 集成验收，可能产生 API 费用。
-- `npm run build:rag-index`：从当前 `sops/` 可重复构建本地 TF-IDF JSON 索引。
-- `npm run build:embedding-index`：调用真实 Embedding 模型并构建本地向量索引。
+- `npm run build:rag-index`：从当前 `sops/` 生成统一 Chunk 数据，并构建 Keyword 与 TF-IDF 索引。
+- `npm run build:embedding-index`：从同一 Chunk 数据调用真实 Embedding 模型并构建本地向量索引。
 - `npm run eval:retrieval`：重建索引并实际比较 Keyword、TF-IDF、Embedding 的 Recall@1、Recall@3 和 No-match accuracy。
 - `npm run build`：把 `src/` 编译到 `dist/`。
 - `node dist/index.js "prompt"`：运行编译后的程序。
@@ -43,7 +43,7 @@ Agent 验收应验证关键行为和安全约束，不得锁死模型的完整�
 
 检索评测集中的每条正样本必须包含查询、预期文档、预期证据和明确判定规则；no-match 样本必须明确预期返回空结果。Keyword、TF-IDF 和 Embedding 检索必须使用同一语料与同一评测集。Recall@K 和 No-match accuracy 必须由评测命令现场计算，禁止把预设数值或历史结果写进 README。
 
-本地索引必须保留文档的 `id`、`title`、`keywords`、`steps` 和 `sourcePath`。TF-IDF 索引要保证相同语料可以重复构建出一致结果；Embedding 索引还必须记录模型 ID、固定 revision 和向量维度。第一版默认 Top-3；修改分词、模型、权重或拒识阈值时，必须同时观察 Recall@1、Recall@3 和 No-match accuracy，不能只优化单一指标。
+三套检索索引必须消费同一份持久化 Chunk 数据，禁止各自直接读取和切分 SOP。`documentId` 由稳定文档身份生成，不能直接使用文件名；`chunkId` 必须由文档 ID、标题路径或内容哈希生成，不能依赖数组下标。索引必须保留 `documentId`、`chunkId`、文档标题、标题路径、内容哈希和 `sourcePath`。TF-IDF 与 Chunk 数据要保证相同语料可以重复构建出一致结果；Embedding 索引还必须记录模型 ID、固定 revision 和向量维度。第一版默认 Top-3；修改分块、分词、模型、权重或拒识阈值时，必须同时观察 Recall@1、Recall@3 和 No-match accuracy，不能只优化单一指标。
 
 ## 提交与 Pull Request
 

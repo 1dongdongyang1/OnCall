@@ -1,21 +1,20 @@
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { loadSopDocuments } from "../data-sources/markdown-sop-source.js";
-import type { Sop, SopSearchResult, SopSource } from "../data-sources/sop-source.js";
+import type { SopSearchResult, SopSource } from "../data-sources/sop-source.js";
+import { loadChunkStore, type SopChunk } from "./chunk-store.js";
 import type { Embedder } from "./embedder.js";
-import { sopDocumentContent } from "./sop-document-content.js";
+import { chunkSearchText } from "./text-tokenizer.js";
 
-type IndexedEmbeddingDocument = Sop & { vector: number[] };
+type IndexedEmbeddingChunk = SopChunk & { vector: number[] };
 
 export type LocalEmbeddingIndex = {
-  formatVersion: 1;
+  formatVersion: 2;
   kind: "embedding";
-  corpusHash: string;
+  chunkStoreHash: string;
   modelId: string;
   modelRevision: string;
   dimensions: number;
-  documents: IndexedEmbeddingDocument[];
+  chunks: IndexedEmbeddingChunk[];
 };
 
 function cosineSimilarity(left: number[], right: number[]): number {
@@ -26,37 +25,33 @@ function cosineSimilarity(left: number[], right: number[]): number {
 }
 
 export async function buildLocalEmbeddingIndex(
-  sopDirectory: string,
+  chunkStorePath: string,
   indexPath: string,
   embedder: Embedder,
 ): Promise<LocalEmbeddingIndex> {
-  const documents = await loadSopDocuments(sopDirectory);
-  const vectors = await embedder.embed(documents.map(sopDocumentContent));
+  const store = await loadChunkStore(chunkStorePath);
+  const vectors = await embedder.embed(store.chunks.map(chunkSearchText));
   const dimensions = vectors[0]?.length ?? 0;
-
   if (
-    vectors.length !== documents.length ||
+    vectors.length !== store.chunks.length ||
     dimensions === 0 ||
     vectors.some((vector) => vector.length !== dimensions)
   ) {
-    throw new Error("无法构建索引：Embedding 数量或维度与 SOP 文档不一致");
+    throw new Error("无法构建索引：Embedding 数量或维度与 Chunk 不一致");
   }
 
   const index: LocalEmbeddingIndex = {
-    formatVersion: 1,
+    formatVersion: 2,
     kind: "embedding",
-    corpusHash: createHash("sha256")
-      .update(JSON.stringify(documents))
-      .digest("hex"),
+    chunkStoreHash: store.corpusHash,
     modelId: embedder.modelId,
     modelRevision: embedder.modelRevision,
     dimensions,
-    documents: documents.map((document, index) => ({
-      ...document,
+    chunks: store.chunks.map((chunk, index) => ({
+      ...chunk,
       vector: vectors[index] ?? [],
     })),
   };
-
   await mkdir(dirname(indexPath), { recursive: true });
   await writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
   return index;
@@ -68,20 +63,16 @@ export class LocalEmbeddingSopSource implements SopSource {
   constructor(
     private readonly indexPath: string,
     private readonly embedder: Embedder,
-    private readonly minimumScore = 0.35,
+    private readonly minimumScore = 0.42,
   ) {}
 
   private async loadIndex(): Promise<LocalEmbeddingIndex> {
-    if (!this.index) {
-      this.index = JSON.parse(
-        await readFile(this.indexPath, "utf8"),
-      ) as LocalEmbeddingIndex;
-      if (
-        this.index.modelId !== this.embedder.modelId ||
-        this.index.modelRevision !== this.embedder.modelRevision
-      ) {
-        throw new Error("Embedding 索引所用模型与当前 Embedder 不一致，请重建索引");
-      }
+    this.index ??= JSON.parse(await readFile(this.indexPath, "utf8")) as LocalEmbeddingIndex;
+    if (
+      this.index.modelId !== this.embedder.modelId ||
+      this.index.modelRevision !== this.embedder.modelRevision
+    ) {
+      throw new Error("Embedding 索引所用模型与当前 Embedder 不一致，请重建索引");
     }
     return this.index;
   }
@@ -92,14 +83,13 @@ export class LocalEmbeddingSopSource implements SopSource {
     if (!queryVector) {
       return [];
     }
-
-    return index.documents
-      .map(({ vector, ...document }): SopSearchResult => ({
-        ...document,
+    return index.chunks
+      .map(({ vector, ...chunk }): SopSearchResult => ({
+        ...chunk,
         score: cosineSimilarity(queryVector, vector),
       }))
-      .filter((document) => document.score >= this.minimumScore)
-      .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+      .filter((chunk) => chunk.score >= this.minimumScore)
+      .sort((left, right) => right.score - left.score || left.chunkId.localeCompare(right.chunkId))
       .slice(0, Math.max(0, limit));
   }
 }

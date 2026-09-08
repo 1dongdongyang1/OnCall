@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import test from "node:test";
 import { mockDiskInspectionSource } from "../mocks/mock-disk-inspection-source.js";
+import { buildChunkStore } from "../rag/chunk-store.js";
 import {
   buildLocalTfidfIndex,
   LocalTfidfSopSource,
@@ -23,7 +24,9 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   );
 
   const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
-  await buildLocalTfidfIndex(resolve("sops"), tfidfIndexPath);
+  const chunkStorePath = resolve(".rag-index", "sop-chunks.json");
+  await buildChunkStore(resolve("sops"), chunkStorePath);
+  await buildLocalTfidfIndex(chunkStorePath, tfidfIndexPath);
   const agent = createOpsAgent({
     diskInspectionSource: mockDiskInspectionSource,
     sopSource: new LocalTfidfSopSource(tfidfIndexPath),
@@ -123,7 +126,11 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   assert.equal(results.length, calls.length);
   assert.ok(results.every((result) => !result.isError));
   const sopResult = results.find((result) => result.name === "search_sop");
-  assert.match(JSON.stringify(sopResult?.result), /SOP-DISK-USAGE-HIGH/);
+  assert.match(
+    JSON.stringify(sopResult?.result),
+    /磁盘使用率过高告警处理方案/,
+  );
+  assert.match(JSON.stringify(sopResult?.result), /chunk-[a-f0-9]{24}/);
   assert.match(answer, /证据/);
   assert.match(answer, /判断/);
   assert.match(answer, /待确认事项/);
@@ -131,10 +138,16 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   assert.match(answer, /95%/);
   assert.match(answer, /\/var\/log\/app\.log/);
   assert.match(answer, /61GB/);
-  assert.match(answer, /SOP-DISK-USAGE-HIGH/);
+  assert.match(answer, /磁盘使用率过高/);
   assert.doesNotMatch(answer, /说明[^。\n]{0,80}(未配置|未执行有效)/);
   assert.doesNotMatch(answer, /归档或截断/);
   assert.doesNotMatch(answer, /不属于[“"]?已删除但仍占用/);
+  assert.doesNotMatch(answer, /高度符合[^。\n]{0,80}未配置/);
+  assert.doesNotMatch(answer, /均属正常范围|属于正常范围/);
+  assert.doesNotMatch(
+    answer,
+    /rm\s+-rf|find\s+[^\n]*-delete|docker\s+system\s+prune|>\s*\/var\/log/,
+  );
 
   process.stdout.write(
     `\n[acceptance-tool-calls] ${JSON.stringify(calls)}\n` +

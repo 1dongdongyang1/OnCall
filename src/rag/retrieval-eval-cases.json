@@ -1,86 +1,128 @@
 [
   {
-    "id": "disk-root-low-space",
-    "query": "根分区只剩少量空间，应该先确认哪些信息",
-    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
-    "expectedEvidence": "确认大文件所属业务、日志轮转策略、保留要求和业务影响。",
-    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+    "id": "cpu-threshold",
+    "query": "CPU使用率连续五分钟超过80%，该怎么排查",
+    "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
+    "expectedEvidence": "HighCPUUsage 的触发条件和系统日志查询步骤。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
+  },
+  {
+    "id": "cpu-loop",
+    "query": "单个进程接近100%，日志反复打印相同错误堆栈",
+    "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
+    "expectedEvidence": "死循环或无限递归的特征和处理方案。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
+  },
+  {
+    "id": "cpu-cron-overlap",
+    "query": "定时任务重叠执行导致周期性负载升高",
+    "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
+    "expectedEvidence": "检查定时任务配置、错峰和互斥锁。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
   },
   {
     "id": "disk-growing-log",
-    "query": "app.log 持续写入导致容量告警，如何安全处理",
-    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
-    "expectedEvidence": "禁止直接删除仍在写入的文件，按变更流程归档或清理。",
-    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+    "query": "根分区95%，var log 下应用日志持续增长",
+    "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedEvidence": "日志文件过大的特征以及日志轮转和日志级别建议。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
   },
   {
-    "id": "disk-explicit-keyword",
-    "query": "磁盘使用率过高的处置步骤",
-    "expectedDocumentIds": ["SOP-DISK-USAGE-HIGH"],
-    "expectedEvidence": "记录使用率和大文件证据，确认轮转与保留要求。",
-    "decisionRule": "Top-K 中包含 SOP-DISK-USAGE-HIGH 即计为召回。"
+    "id": "disk-inode",
+    "query": "文件系统 inode 快耗尽，应该用什么命令检查",
+    "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedEvidence": "使用 df -i 查看 inode 使用情况。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
   },
   {
-    "id": "xid-pcie",
-    "query": "NVRM 报错，GPU 从 PCIe 总线掉线怎么留证",
-    "expectedDocumentIds": ["SOP-GPU-XID-79"],
-    "expectedEvidence": "采集 nvidia-smi、dmesg 和 PCIe 链路状态。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+    "id": "disk-docker",
+    "query": "Docker 未使用镜像和停止容器占满磁盘",
+    "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedEvidence": "Docker 镜像、容器、卷和日志占用的排查内容。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
   },
   {
-    "id": "xid-fallen-off-bus",
-    "query": "fallen off the bus 应该如何处理",
-    "expectedDocumentIds": ["SOP-GPU-XID-79"],
-    "expectedEvidence": "迁移业务并保留证据后按变更流程重启。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+    "id": "memory-full-gc",
+    "query": "Full GC 后内存仍然无法释放，怀疑对象被长期引用",
+    "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
+    "expectedEvidence": "内存泄漏特征、堆转储和 MAT 分析。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
   },
   {
-    "id": "xid-recurrence",
-    "query": "Xid79 重启后再次出现，需要升级给谁",
-    "expectedDocumentIds": ["SOP-GPU-XID-79"],
-    "expectedEvidence": "复现后隔离节点并升级给硬件团队。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-XID-79 即计为召回。"
+    "id": "memory-oom",
+    "query": "应用出现 OutOfMemoryError 和 GC overhead",
+    "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
+    "expectedEvidence": "OOM 应用日志查询条件和内存排查步骤。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
   },
   {
-    "id": "gpu-temperature-rising",
-    "query": "GPU 温度持续上升，需要检查风扇和风道",
-    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
-    "expectedEvidence": "检查风扇、风道、环境温度和功耗限制。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+    "id": "memory-jmap",
+    "query": "怎样用 jmap 生成 heap.hprof 堆快照",
+    "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
+    "expectedEvidence": "jmap -dump 命令和重启前保留快照。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
   },
   {
-    "id": "gpu-environment-temperature",
-    "query": "机房环境温度和功耗限制应该怎么排查",
-    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
-    "expectedEvidence": "检查环境温度和功耗限制并持续采集温度。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+    "id": "service-health-check",
+    "query": "服务健康检查全部失败，错误率已经超过50%",
+    "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
+    "expectedEvidence": "ServiceUnavailable 的触发条件和状态日志排查。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
   },
   {
-    "id": "gpu-overheat-explicit",
-    "query": "显卡过热后如何迁移负载",
-    "expectedDocumentIds": ["SOP-GPU-OVERHEAT"],
-    "expectedEvidence": "降低或迁移当前负载。",
-    "decisionRule": "Top-K 中包含 SOP-GPU-OVERHEAT 即计为召回。"
+    "id": "service-dependency",
+    "query": "服务不可用，想确认 database redis 和 mq 依赖是否正常",
+    "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
+    "expectedEvidence": "检查依赖服务状态的日志查询条件。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
   },
   {
-    "id": "no-match-database-replication",
-    "query": "数据库主从复制延迟如何处理",
+    "id": "service-release-rollback",
+    "query": "新版本发布后所有实例无法响应，需要回滚稳定版本",
+    "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
+    "expectedEvidence": "应用崩溃或无法启动时的回滚和恢复建议。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
+  },
+  {
+    "id": "slow-p99",
+    "query": "接口 P99 响应时间过长，请求超时明显增加",
+    "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
+    "expectedEvidence": "响应时间指标、超时现象和性能排查。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+  },
+  {
+    "id": "slow-sql-n-plus-one",
+    "query": "数据库慢查询并且可能存在 N+1 查询问题",
+    "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
+    "expectedEvidence": "数据库慢查询、索引和 N+1 检查项。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+  },
+  {
+    "id": "slow-external-api",
+    "query": "外部 API 调用耗时过长且没有合理超时设置",
+    "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
+    "expectedEvidence": "外部 API 调用、超时设置和性能优化检查。",
+    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+  },
+  {
+    "id": "no-match-gpu-xid",
+    "query": "GPU 出现 Xid 79 并从 PCIe 总线掉线",
     "expectedDocumentIds": [],
-    "expectedEvidence": "当前语料没有数据库复制 SOP。",
+    "expectedEvidence": "当前五篇源文档没有 GPU Xid SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   },
   {
     "id": "no-match-certificate",
     "query": "TLS 证书即将过期如何续签",
     "expectedDocumentIds": [],
-    "expectedEvidence": "当前语料没有证书续签 SOP。",
+    "expectedEvidence": "当前五篇源文档没有证书续签 SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   },
   {
-    "id": "no-match-kubernetes-image",
-    "query": "Kubernetes Pod ImagePullBackOff 如何处理",
+    "id": "no-match-ntp",
+    "query": "NTP 时钟不同步导致服务器时间漂移",
     "expectedDocumentIds": [],
-    "expectedEvidence": "当前语料没有 Kubernetes 镜像拉取 SOP。",
+    "expectedEvidence": "当前五篇源文档没有 NTP SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   }
 ]

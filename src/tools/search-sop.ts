@@ -11,7 +11,10 @@ const parameters = Type.Object({
 
 export function createSearchSopTool(
   source: SopSource,
-): AgentTool<typeof parameters, { sopIds: string[] }> {
+): AgentTool<
+  typeof parameters,
+  { documentIds: string[]; chunkIds: string[] }
+> {
   return {
     name: "search_sop",
     label: "Search SOP",
@@ -30,7 +33,7 @@ export function createSearchSopTool(
               text: JSON.stringify({ found: false, query }),
             },
           ],
-          details: { sopIds: [] },
+          details: { documentIds: [], chunkIds: [] },
         };
       }
 
@@ -38,10 +41,13 @@ export function createSearchSopTool(
         content: [
           {
             type: "text",
-              text: JSON.stringify({ found: true, results: matches }),
+            text: JSON.stringify({ found: true, results: matches }),
           },
         ],
-        details: { sopIds: matches.map((match) => match.id) },
+        details: {
+          documentIds: [...new Set(matches.map((match) => match.documentId))],
+          chunkIds: matches.map((match) => match.chunkId),
+        },
       };
     },
   };

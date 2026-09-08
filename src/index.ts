@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { createOpsAgent } from "./agent/ops-agent.js";
 import { mockDiskInspectionSource } from "./mocks/mock-disk-inspection-source.js";
+import { buildChunkStore } from "./rag/chunk-store.js";
 import {
   buildLocalTfidfIndex,
   LocalTfidfSopSource,
@@ -21,7 +22,9 @@ if (!process.env.DEEPSEEK_API_KEY) {
 }
 
 const tfidfIndexPath = resolve(".rag-index", "sop-tfidf-index.json");
-await buildLocalTfidfIndex(resolve("sops"), tfidfIndexPath);
+const chunkStorePath = resolve(".rag-index", "sop-chunks.json");
+await buildChunkStore(resolve("sops"), chunkStorePath);
+await buildLocalTfidfIndex(chunkStorePath, tfidfIndexPath);
 
 const agent = createOpsAgent({
   diskInspectionSource: mockDiskInspectionSource,
