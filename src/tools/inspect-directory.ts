@@ -33,7 +33,11 @@ export function createListLargeDirectoriesTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result),
+            text: JSON.stringify({
+              evidenceType: "现场证据",
+              tool: "list_large_directories",
+              data: result,
+            }),
           },
         ],
         details: result,

@@ -33,7 +33,11 @@ export function createInspectFileTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result),
+            text: JSON.stringify({
+              evidenceType: "现场证据",
+              tool: "inspect_file",
+              data: result,
+            }),
           },
         ],
         details: result,

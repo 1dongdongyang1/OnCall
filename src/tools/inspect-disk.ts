@@ -29,7 +29,11 @@ export function createGetDiskUsageTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(result),
+            text: JSON.stringify({
+              evidenceType: "现场证据",
+              tool: "get_disk_usage",
+              data: result,
+            }),
           },
         ],
         details: result,

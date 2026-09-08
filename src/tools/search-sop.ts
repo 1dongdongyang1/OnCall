@@ -30,7 +30,12 @@ export function createSearchSopTool(
           content: [
             {
               type: "text",
-              text: JSON.stringify({ found: false, query }),
+              text: JSON.stringify({
+                evidenceType: "SOP 参考",
+                authorization: false,
+                found: false,
+                query,
+              }),
             },
           ],
           details: { documentIds: [], chunkIds: [] },
@@ -41,7 +46,12 @@ export function createSearchSopTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify({ found: true, results: matches }),
+            text: JSON.stringify({
+              evidenceType: "SOP 参考",
+              authorization: false,
+              found: true,
+              results: matches,
+            }),
           },
         ],
         details: {

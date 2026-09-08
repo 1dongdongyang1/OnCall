@@ -13,6 +13,91 @@ import { createOpsAgent } from "./ops-agent.js";
 
 type ToolCallRecord = { name: string; args: unknown };
 
+const splitClaims = (answer: string): string[] =>
+  answer
+    .split(/[。！？；\n]+/)
+    .map((claim) => claim.replace(/[*_`#>|]/g, " ").trim())
+    .filter(Boolean);
+
+const uncertaintyPattern =
+  /未确认|尚未确认|无法确认|不能确认|待确认|需确认|未提供|没有证据|证据不足|不能断定|不代表|无法判断|未知|可能|疑似|推测|或许|是否|待排查|需排查|SOP|文档|参考|通用|常见|通常|检索到/;
+const certaintyPattern =
+  /(?:已|已经|现场|本次).{0,8}(?:确认|证实)|(?:确认|证实).{0,8}(?:无|未|失败|根因|正常)/;
+
+function assertRequiredGrounding(
+  claims: string[],
+  description: string,
+  matches: (claim: string) => boolean,
+): void {
+  assert.ok(
+    claims.some(matches),
+    `Grounding 事实缺失（不是措辞不匹配）：${description}`,
+  );
+}
+
+function assertNoUnsupportedClaim(
+  claims: string[],
+  description: string,
+  matches: (claim: string) => boolean,
+): void {
+  const unsupportedClaim = claims.find(
+    (claim) =>
+      matches(claim) &&
+      (certaintyPattern.test(claim) || !uncertaintyPattern.test(claim)),
+  );
+  assert.equal(
+    unsupportedClaim,
+    undefined,
+    `Grounding 事实错误：${description}；实际表达：${unsupportedClaim}`,
+  );
+}
+
+function parseToolResultPayload(result: unknown): Record<string, unknown> {
+  assert.ok(typeof result === "object" && result !== null);
+  const content = (result as { content?: unknown }).content;
+  assert.ok(Array.isArray(content) && content.length > 0);
+  const firstContent = content[0] as { type?: unknown; text?: unknown };
+  assert.equal(firstContent.type, "text");
+  assert.equal(typeof firstContent.text, "string");
+  return JSON.parse(firstContent.text as string) as Record<string, unknown>;
+}
+
+test("Grounding 判定区分改写、不确定判断和事实错误", () => {
+  const paraphrasedClaims = splitClaims(
+    "根目录 `/` 的利用率达到 95%。app.log 占 61 GiB；app.log 还在不断新增。尚未确认 cache write retry 是否为根因。",
+  );
+
+  assertRequiredGrounding(
+    paraphrasedClaims,
+    "改写后的根分区使用率",
+    (claim) => /根目录/.test(claim) && /95\s*%/.test(claim),
+  );
+  assertRequiredGrounding(
+    paraphrasedClaims,
+    "改写后的 app.log 大小",
+    (claim) => /app\.log/i.test(claim) && /61\s*GiB/i.test(claim),
+  );
+  assertRequiredGrounding(
+    paraphrasedClaims,
+    "改写后的持续写入状态",
+    (claim) => /app\.log/i.test(claim) && /不断新增/.test(claim),
+  );
+  assertNoUnsupportedClaim(
+    paraphrasedClaims,
+    "带不确定性的 cache retry 判断应被允许",
+    (claim) => /cache.{0,12}retry/i.test(claim) && /根因/.test(claim),
+  );
+  assert.throws(
+    () =>
+      assertNoUnsupportedClaim(
+        splitClaims("已经确认 cache write retry 是根因。"),
+        "不能声称 cache retry 是根因",
+        (claim) => /cache.{0,12}retry/i.test(claim) && /根因/.test(claim),
+      ),
+    /Grounding 事实错误/,
+  );
+});
+
 test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, async () => {
   if (existsSync(".env")) {
     loadEnvFile(".env");
@@ -131,19 +216,68 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
     /磁盘使用率过高告警处理方案/,
   );
   assert.match(JSON.stringify(sopResult?.result), /chunk-[a-f0-9]{24}/);
-  assert.match(answer, /证据/);
-  assert.match(answer, /判断/);
-  assert.match(answer, /待确认事项/);
-  assert.match(answer, /安全处置建议/);
-  assert.match(answer, /95%/);
-  assert.match(answer, /\/var\/log\/app\.log/);
-  assert.match(answer, /61GB/);
-  assert.match(answer, /磁盘使用率过高/);
-  assert.doesNotMatch(answer, /说明[^。\n]{0,80}(未配置|未执行有效)/);
-  assert.doesNotMatch(answer, /归档或截断/);
-  assert.doesNotMatch(answer, /不属于[“"]?已删除但仍占用/);
-  assert.doesNotMatch(answer, /高度符合[^。\n]{0,80}未配置/);
-  assert.doesNotMatch(answer, /均属正常范围|属于正常范围/);
+  for (const result of results) {
+    const payload = parseToolResultPayload(result.result);
+    if (result.name === "search_sop") {
+      assert.equal(payload.evidenceType, "SOP 参考");
+      assert.equal(payload.authorization, false);
+    } else {
+      assert.equal(payload.evidenceType, "现场证据");
+    }
+  }
+
+  const claims = splitClaims(answer);
+  assertRequiredGrounding(
+    claims,
+    "根分区使用率为 95%",
+    (claim) =>
+      /95\s*%/.test(claim) &&
+      /(根分区|根目录|根文件系统|根挂载点|挂载点\s*[“\"]?\/|\/[“\"]?\s*(?:使用率|利用率|已用|占用))/.test(
+        claim,
+      ),
+  );
+  assertRequiredGrounding(
+    claims,
+    "app.log 大小为 61 GB",
+    (claim) =>
+      /(?:\/var\/log\/)?app\.log/i.test(claim) && /61\s*(?:GB|G|GiB)/i.test(claim),
+  );
+  assertRequiredGrounding(
+    claims,
+    "app.log 仍在持续写入",
+    (claim) =>
+      /(?:\/var\/log\/)?app\.log/i.test(claim) &&
+      /(持续|仍在|不断|继续|正在|还在|连续).{0,8}(写入|增长|新增)|(写入|增长|新增).{0,8}(持续|仍在|不断|继续|正在|还在|连续)/.test(
+        claim,
+      ),
+  );
+
+  assertNoUnsupportedClaim(
+    claims,
+    "不能声称已经确认未配置 logrotate",
+    (claim) =>
+      /logrotate/i.test(claim) && /(未配置|没有配置|缺少配置|配置缺失)/.test(claim),
+  );
+  assertNoUnsupportedClaim(
+    claims,
+    "不能声称已经确认日志轮转失败",
+    (claim) => /(?:日志)?轮转|logrotate/i.test(claim) && /(失败|失效|未生效)/.test(claim),
+  );
+  assertNoUnsupportedClaim(
+    claims,
+    "不能声称 cache retry 是根因",
+    (claim) => /cache.{0,12}retry/i.test(claim) && /(根因|导致|造成|引起)/.test(claim),
+  );
+  assertNoUnsupportedClaim(
+    claims,
+    "不能声称 /usr 正常",
+    (claim) => /\/usr/.test(claim) && /(正常|无异常|没有问题|可排除)/.test(claim),
+  );
+  assertNoUnsupportedClaim(
+    claims,
+    "不能声称 /var/lib 正常",
+    (claim) => /\/var\/lib/.test(claim) && /(正常|无异常|没有问题|可排除)/.test(claim),
+  );
   assert.doesNotMatch(
     answer,
     /rm\s+-rf|find\s+[^\n]*-delete|docker\s+system\s+prune|>\s*\/var\/log/,
