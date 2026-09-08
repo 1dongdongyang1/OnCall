@@ -4,28 +4,32 @@
 
 ## 项目目标
 
-OnCall Agent 的目标是把“故障描述 → 查询处置依据 → 输出可执行步骤”串成一条可观察、可验证的处理链路：
+OnCall Agent 的目标是把“故障描述 → 收集只读证据 → 输出有依据的判断”串成一条可观察、可验证的处理链路。
+
+首个磁盘告警事件使用固定 Mock 数据跑通以下链路：
 
 ```text
-用户描述故障
-  → DeepSeek 判断是否需要工具
-  → Pi Agent 调用 search_sop
-  → 工具返回匹配的 SOP
-  → DeepSeek 根据 SOP 组织最终回答
+磁盘使用率 > 90%
+  → get_disk_usage：/=95%
+  → list_large_directories("/")：/var=72G
+  → list_large_directories("/var")：/var/log=65G
+  → 判断日志异常增长，需要进一步确认日志类型
 ```
 
 ## 当前能力
 
 - 使用 `deepseek-v4-flash` 进行真实模型推理。
 - 使用 `@earendil-works/pi-agent-core` 管理 Agent 循环和工具调用。
-- 提供只读的 mock `search_sop` 工具。
+- 提供只读的 `search_sop`、`get_disk_usage` 和 `list_large_directories` 工具。
+- 工具通过数据源接口获取结果，当前注入独立的 Mock 数据源。
 - 支持 GPU Xid 79 和 GPU 温度过高两类 mock SOP。
+- 支持磁盘根分区使用率过高的首个固定诊断事件。
 - 输出工具名、调用参数、执行结果和调用次数，便于验证 Tool Calling。
 - 通过 `.env` 管理 DeepSeek API Key。
 
 ## 当前边界
 
-- `search_sop` 目前查询的是代码中的 mock 数据，不是真实知识库。
+- 程序入口目前注入 Mock 数据源，不会读取真实主机或知识库。
 - 当前只输出诊断与处置建议，不会执行重启、隔离节点等变更操作。
 - 尚未接入监控告警、CMDB、工单系统或会话持久化。
 - `npm test` 当前只做 TypeScript 类型检查，不会自动发起付费模型请求。
@@ -68,6 +72,12 @@ npm ci
 npm start -- "GPU 报错 Xid 79，应该怎么处理？"
 ```
 
+运行首个磁盘告警事件：
+
+```powershell
+npm start -- "告警：磁盘使用率超过 90%，请定位原因"
+```
+
 成功调用工具时，终端会输出类似记录：
 
 ```text
@@ -99,10 +109,16 @@ OnCall/
 │  ├─ agent/
 │  │  ├─ ops-agent.ts          # 组装模型、提示词和已启用工具
 │  │  └─ system-prompt.ts      # OnCall Agent 系统提示词
+│  ├─ data-sources/
+│  │  ├─ disk-inspection-source.ts # 磁盘数据源接口和返回类型
+│  │  └─ sop-source.ts             # SOP 数据源接口和返回类型
+│  ├─ mocks/
+│  │  ├─ mock-disk-inspection-source.ts # 首个磁盘事件的固定数据
+│  │  └─ mock-sop-source.ts             # 固定 SOP 数据
 │  ├─ tools/
-│  │  ├─ search-sop.ts         # 已实现：mock SOP 查询工具
-│  │  ├─ inspect-disk.ts       # 规划中：只读磁盘检查工具
-│  │  └─ inspect-directory.ts  # 规划中：只读目录检查工具
+│  │  ├─ search-sop.ts         # SOP Tool 与数据源调用
+│  │  ├─ inspect-disk.ts       # 磁盘使用率 Tool 与数据源调用
+│  │  └─ inspect-directory.ts  # 大目录 Tool 与数据源调用
 │  ├─ rag/
 │  │  ├─ retriever.ts          # 规划中：SOP 检索接口
 │  │  └─ embedder.ts           # 规划中：文本向量化接口
@@ -113,4 +129,4 @@ OnCall/
 └─ tsconfig.json               # TypeScript 配置
 ```
 
-当前只有 `search_sop` 会注册到 Agent。磁盘检查工具和 RAG 文件仅建立了代码边界，尚无运行实现，不会被模型调用。
+`src/index.ts` 是当前组合入口：它把 Mock 数据源注入 Agent。后续接入真实场景时，实现相同的数据源接口，并在入口处替换注入对象即可；工具名称、参数和返回结构不需要改变。RAG 文件仍仅建立了代码边界，尚无运行实现。

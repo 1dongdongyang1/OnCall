@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { createOpsAgent } from "./agent/ops-agent.js";
+import { mockDiskInspectionSource } from "./mocks/mock-disk-inspection-source.js";
+import { mockSopSource } from "./mocks/mock-sop-source.js";
 
 const prompt = process.argv.slice(2).join(" ") || "你好，请介绍一下自己。";
 
@@ -14,7 +16,10 @@ if (!process.env.DEEPSEEK_API_KEY) {
   );
 }
 
-const agent = createOpsAgent();
+const agent = createOpsAgent({
+  diskInspectionSource: mockDiskInspectionSource,
+  sopSource: mockSopSource,
+});
 
 let toolCallCount = 0;
 
