@@ -96,11 +96,21 @@ node dist/index.js "GPU 报错 Xid 79，应该怎么处理？"
 ```text
 OnCall/
 ├─ src/
-│  ├─ index.ts                 # Agent 入口和事件观察
-│  └─ tools/
-│     └─ search-sop.ts         # mock SOP 查询工具
+│  ├─ agent/
+│  │  ├─ ops-agent.ts          # 组装模型、提示词和已启用工具
+│  │  └─ system-prompt.ts      # OnCall Agent 系统提示词
+│  ├─ tools/
+│  │  ├─ search-sop.ts         # 已实现：mock SOP 查询工具
+│  │  ├─ inspect-disk.ts       # 规划中：只读磁盘检查工具
+│  │  └─ inspect-directory.ts  # 规划中：只读目录检查工具
+│  ├─ rag/
+│  │  ├─ retriever.ts          # 规划中：SOP 检索接口
+│  │  └─ embedder.ts           # 规划中：文本向量化接口
+│  └─ index.ts                 # CLI 启动、环境检查和事件输出
 ├─ .env.example                # 环境变量模板
 ├─ .gitignore                  # Git 忽略规则
 ├─ package.json                # 依赖与命令
 └─ tsconfig.json               # TypeScript 配置
 ```
+
+当前只有 `search_sop` 会注册到 Agent。磁盘检查工具和 RAG 文件仅建立了代码边界，尚无运行实现，不会被模型调用。
