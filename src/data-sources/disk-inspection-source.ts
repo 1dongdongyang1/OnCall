@@ -1,4 +1,5 @@
 export type DiskUsage = {
+  node: string;
   filesystems: Array<{
     mountPoint: string;
     totalGb: number;
@@ -9,14 +10,16 @@ export type DiskUsage = {
 };
 
 export type DirectoryUsage = {
+  node: string;
   path: string;
   entries: Array<{
     path: string;
     sizeGb: number;
+    inspectable: boolean;
   }>;
 };
 
 export interface DiskInspectionSource {
-  getDiskUsage(): Promise<DiskUsage>;
-  listLargeDirectories(path: string): Promise<DirectoryUsage>;
+  getDiskUsage(node: string): Promise<DiskUsage>;
+  listLargeDirectories(node: string, path: string): Promise<DirectoryUsage>;
 }

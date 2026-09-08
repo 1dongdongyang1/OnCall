@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { createOpsAgent } from "./agent/ops-agent.js";
+import { MarkdownSopSource } from "./data-sources/markdown-sop-source.js";
 import { mockDiskInspectionSource } from "./mocks/mock-disk-inspection-source.js";
-import { mockSopSource } from "./mocks/mock-sop-source.js";
 
 const prompt = process.argv.slice(2).join(" ") || "你好，请介绍一下自己。";
 
@@ -18,7 +19,7 @@ if (!process.env.DEEPSEEK_API_KEY) {
 
 const agent = createOpsAgent({
   diskInspectionSource: mockDiskInspectionSource,
-  sopSource: mockSopSource,
+  sopSource: new MarkdownSopSource(resolve("sops")),
 });
 
 let toolCallCount = 0;

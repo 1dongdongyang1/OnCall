@@ -16,7 +16,7 @@ export function createSearchSopTool(
     name: "search_sop",
     label: "Search SOP",
     description:
-      "从内部 SOP 知识库查询故障处理步骤。回答运维故障前必须先调用此工具。",
+      "根据故障关键词从内部 SOP 文档中查询处置依据。需要 SOP 步骤时调用此工具。",
     parameters,
     executionMode: "sequential",
     execute: async (_toolCallId, { query }) => {
