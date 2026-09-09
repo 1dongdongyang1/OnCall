@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import type { SopSearchResult, SopSource } from "../data-sources/sop-source.js";
 import { loadChunkStore, type SopChunk } from "./chunk-store.js";
 import { chunkSearchText, tokenize } from "./text-tokenizer.js";
+import { assertIndexMatchesChunkStore } from "./index-integrity.js";
 
 export type LocalKeywordIndex = {
   formatVersion: 1;
@@ -11,6 +12,8 @@ export type LocalKeywordIndex = {
   chunks: SopChunk[];
   postings: Record<string, string[]>;
 };
+
+export const DEFAULT_KEYWORD_MINIMUM_SCORE = 10;
 
 export async function buildLocalKeywordIndex(
   chunkStorePath: string,
@@ -48,11 +51,29 @@ export class LocalKeywordSopSource implements SopSource {
 
   constructor(
     private readonly indexPath: string,
-    private readonly minimumScore = 10,
+    private readonly chunkStorePath: string,
+    private readonly minimumScore = DEFAULT_KEYWORD_MINIMUM_SCORE,
   ) {}
 
   private async loadIndex(): Promise<LocalKeywordIndex> {
     this.index ??= JSON.parse(await readFile(this.indexPath, "utf8")) as LocalKeywordIndex;
+    if (this.index.kind !== "keyword" || this.index.formatVersion !== 1) {
+      throw new Error("Keyword 索引格式无效，请重建索引");
+    }
+    await assertIndexMatchesChunkStore(
+      "Keyword",
+      this.chunkStorePath,
+      this.index.chunkStoreHash,
+      this.index.chunks,
+    );
+    const knownChunkIds = new Set(this.index.chunks.map((chunk) => chunk.chunkId));
+    if (
+      Object.values(this.index.postings).some((ids) =>
+        ids.some((id) => !knownChunkIds.has(id)),
+      )
+    ) {
+      throw new Error("Keyword 倒排表引用了未知 Chunk，请重建索引");
+    }
     return this.index;
   }
 

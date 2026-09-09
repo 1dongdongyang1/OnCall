@@ -4,6 +4,7 @@ import type { SopSearchResult, SopSource } from "../data-sources/sop-source.js";
 import { loadChunkStore, type SopChunk } from "./chunk-store.js";
 import type { Embedder } from "./embedder.js";
 import { chunkSearchText } from "./text-tokenizer.js";
+import { assertIndexMatchesChunkStore } from "./index-integrity.js";
 
 type IndexedEmbeddingChunk = SopChunk & { vector: number[] };
 
@@ -16,6 +17,8 @@ export type LocalEmbeddingIndex = {
   dimensions: number;
   chunks: IndexedEmbeddingChunk[];
 };
+
+export const DEFAULT_EMBEDDING_MINIMUM_SCORE = 0.42;
 
 function cosineSimilarity(left: number[], right: number[]): number {
   if (left.length !== right.length) {
@@ -62,18 +65,31 @@ export class LocalEmbeddingSopSource implements SopSource {
 
   constructor(
     private readonly indexPath: string,
+    private readonly chunkStorePath: string,
     private readonly embedder: Embedder,
-    private readonly minimumScore = 0.42,
+    private readonly minimumScore = DEFAULT_EMBEDDING_MINIMUM_SCORE,
   ) {}
 
   private async loadIndex(): Promise<LocalEmbeddingIndex> {
     this.index ??= JSON.parse(await readFile(this.indexPath, "utf8")) as LocalEmbeddingIndex;
     if (
+      this.index.kind !== "embedding" ||
+      this.index.formatVersion !== 2 ||
       this.index.modelId !== this.embedder.modelId ||
-      this.index.modelRevision !== this.embedder.modelRevision
+      this.index.modelRevision !== this.embedder.modelRevision ||
+      this.index.dimensions <= 0 ||
+      this.index.chunks.some(
+        (chunk) => chunk.vector.length !== this.index?.dimensions,
+      )
     ) {
-      throw new Error("Embedding 索引所用模型与当前 Embedder 不一致，请重建索引");
+      throw new Error("Embedding 索引格式、模型或向量维度不一致，请重建索引");
     }
+    await assertIndexMatchesChunkStore(
+      "Embedding",
+      this.chunkStorePath,
+      this.index.chunkStoreHash,
+      this.index.chunks,
+    );
     return this.index;
   }
 

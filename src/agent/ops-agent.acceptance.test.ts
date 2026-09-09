@@ -114,7 +114,7 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   await buildLocalTfidfIndex(chunkStorePath, tfidfIndexPath);
   const agent = createOpsAgent({
     diskInspectionSource: mockDiskInspectionSource,
-    sopSource: new LocalTfidfSopSource(tfidfIndexPath),
+    sopSource: new LocalTfidfSopSource(tfidfIndexPath, chunkStorePath),
   });
   const calls: ToolCallRecord[] = [];
   const results: Array<{ name: string; isError: boolean; result: unknown }> = [];

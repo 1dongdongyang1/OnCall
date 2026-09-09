@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import type { SopSearchResult, SopSource } from "../data-sources/sop-source.js";
 import { loadChunkStore, type SopChunk } from "./chunk-store.js";
 import { chunkSearchText, tokenize } from "./text-tokenizer.js";
+import { assertIndexMatchesChunkStore } from "./index-integrity.js";
 
 type IndexedChunk = SopChunk & { vector: number[] };
 
@@ -14,6 +15,8 @@ export type LocalTfidfIndex = {
   idf: number[];
   chunks: IndexedChunk[];
 };
+
+export const DEFAULT_TFIDF_MINIMUM_SCORE = 0.2;
 
 function createVector(tokens: string[], vocabulary: string[], idf: number[]): number[] {
   const counts = new Map<string, number>();
@@ -62,11 +65,28 @@ export class LocalTfidfSopSource implements SopSource {
 
   constructor(
     private readonly indexPath: string,
-    private readonly minimumScore = 0.2,
+    private readonly chunkStorePath: string,
+    private readonly minimumScore = DEFAULT_TFIDF_MINIMUM_SCORE,
   ) {}
 
   private async loadIndex(): Promise<LocalTfidfIndex> {
     this.index ??= JSON.parse(await readFile(this.indexPath, "utf8")) as LocalTfidfIndex;
+    if (
+      this.index.kind !== "tfidf" ||
+      this.index.formatVersion !== 2 ||
+      this.index.vocabulary.length !== this.index.idf.length ||
+      this.index.chunks.some(
+        (chunk) => chunk.vector.length !== this.index?.vocabulary.length,
+      )
+    ) {
+      throw new Error("TF-IDF 索引格式或向量维度无效，请重建索引");
+    }
+    await assertIndexMatchesChunkStore(
+      "TF-IDF",
+      this.chunkStorePath,
+      this.index.chunkStoreHash,
+      this.index.chunks,
+    );
     return this.index;
   }
 

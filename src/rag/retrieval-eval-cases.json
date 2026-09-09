@@ -1,128 +1,257 @@
 [
   {
-    "id": "cpu-threshold",
-    "query": "CPU使用率连续五分钟超过80%，该怎么排查",
+    "id": "cpu-alert-original",
+    "category": "alert-original",
+    "query": "HighCPUUsage：CPU使用率连续5分钟超过80%",
     "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
-    "expectedEvidence": "HighCPUUsage 的触发条件和系统日志查询步骤。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-094dcba6890817ca95611e6b"],
+    "expectedEvidence": "HighCPUUsage 的名称和连续5分钟超过80%的触发条件。",
+    "decisionRule": "Top-K 必须命中 CPU 告警名称 Chunk。"
   },
   {
-    "id": "cpu-loop",
-    "query": "单个进程接近100%，日志反复打印相同错误堆栈",
+    "id": "cpu-colloquial-hot-process",
+    "category": "colloquial",
+    "query": "机器突然很卡，有个进程快把一个核吃满了，错误堆栈还一直刷",
     "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
-    "expectedEvidence": "死循环或无限递归的特征和处理方案。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-3e5314485beed7f55e5c5e4b"],
+    "expectedEvidence": "单进程 CPU 接近100%和重复错误堆栈对应死循环或无限递归。",
+    "decisionRule": "Top-K 必须命中 CPU SOP 的死循环或无限递归 Chunk。"
   },
   {
     "id": "cpu-cron-overlap",
-    "query": "定时任务重叠执行导致周期性负载升高",
+    "category": "similar-sop",
+    "query": "负载只在固定时间冲高，怀疑两个定时任务撞在一起执行",
     "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
-    "expectedEvidence": "检查定时任务配置、错峰和互斥锁。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 CPU使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-38dd1ad77f3a34a17bf994ad"],
+    "expectedEvidence": "定时任务重叠执行的周期性特征、错峰与互斥锁建议。",
+    "decisionRule": "Top-K 必须命中 CPU SOP 的定时任务重叠 Chunk，而非泛化到慢响应 SOP。"
   },
   {
-    "id": "disk-growing-log",
-    "query": "根分区95%，var log 下应用日志持续增长",
+    "id": "cpu-step-system-logs",
+    "category": "troubleshooting-step",
+    "query": "CPU告警后查 system-metrics 时地域、时间范围和查询条件是什么",
+    "expectedDocumentIds": ["doc-11fb79358af9ffa4cc6e"],
+    "expectedChunkIds": ["chunk-692b536f3f8f15e683874839"],
+    "expectedEvidence": "CPU SOP 查询 system-metrics 的地域、最近30分钟和 cpu_usage 条件。",
+    "decisionRule": "Top-K 必须命中 CPU 排查步骤2的系统日志查询 Chunk。"
+  },
+  {
+    "id": "disk-alert-original",
+    "category": "alert-original",
+    "query": "HighDiskUsage 严重告警，磁盘使用率持续5分钟超过90%",
     "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
-    "expectedEvidence": "日志文件过大的特征以及日志轮转和日志级别建议。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-4405153dab2f5f08a0983d03"],
+    "expectedEvidence": "HighDiskUsage 告警名、80%警告和90%严重阈值。",
+    "decisionRule": "Top-K 必须命中磁盘告警名称 Chunk。"
   },
   {
-    "id": "disk-inode",
+    "id": "disk-colloquial-growing-log",
+    "category": "colloquial",
+    "query": "根盘快爆了，var log 里的应用日志还在不停变大",
+    "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedChunkIds": ["chunk-1ca4616f69b2013496845e44"],
+    "expectedEvidence": "/var/log 占用大且应用日志持续增长的日志文件过大场景。",
+    "decisionRule": "Top-K 必须命中磁盘 SOP 的日志文件过大 Chunk。"
+  },
+  {
+    "id": "disk-step-inode",
+    "category": "troubleshooting-step",
     "query": "文件系统 inode 快耗尽，应该用什么命令检查",
     "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedChunkIds": ["chunk-8d9cf138e2e1fbb91fc0fa72"],
     "expectedEvidence": "使用 df -i 查看 inode 使用情况。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
+    "decisionRule": "Top-K 必须命中磁盘常用命令中的 inode 检查 Chunk。"
   },
   {
-    "id": "disk-docker",
-    "query": "Docker 未使用镜像和停止容器占满磁盘",
+    "id": "disk-docker-resources",
+    "category": "similar-sop",
+    "query": "Docker 未使用镜像、停止容器和容器日志把磁盘占满",
     "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
-    "expectedEvidence": "Docker 镜像、容器、卷和日志占用的排查内容。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 磁盘使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-0271f108b934bc30a72a72db"],
+    "expectedEvidence": "Docker 镜像、停止容器、卷和容器日志占用的排查内容。",
+    "decisionRule": "Top-K 必须命中磁盘 SOP 的 Docker 资源 Chunk。"
   },
   {
-    "id": "memory-full-gc",
-    "query": "Full GC 后内存仍然无法释放，怀疑对象被长期引用",
+    "id": "disk-step-largest-path",
+    "category": "troubleshooting-step",
+    "query": "磁盘满了以后怎样判断是哪个目录、日志还是数据文件增长",
+    "expectedDocumentIds": ["doc-05acb1a777e3f2d26770"],
+    "expectedChunkIds": ["chunk-aa4f672093148fbe13e47eed"],
+    "expectedEvidence": "分析最大目录、日志大小、临时文件数量和数据增长趋势。",
+    "decisionRule": "Top-K 必须命中磁盘排查步骤4的占用分析 Chunk。"
+  },
+  {
+    "id": "memory-alert-original",
+    "category": "alert-original",
+    "query": "HighMemoryUsage：内存使用率持续5分钟超过85%",
     "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
-    "expectedEvidence": "内存泄漏特征、堆转储和 MAT 分析。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-3ec307e6af9b7a7db852c7c4"],
+    "expectedEvidence": "HighMemoryUsage 名称和持续5分钟超过85%的触发条件。",
+    "decisionRule": "Top-K 必须命中内存告警名称 Chunk。"
   },
   {
-    "id": "memory-oom",
-    "query": "应用出现 OutOfMemoryError 和 GC overhead",
+    "id": "memory-colloquial-leak",
+    "category": "colloquial",
+    "query": "服务跑得越久越吃内存，Full GC 之后也降不下来",
     "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
-    "expectedEvidence": "OOM 应用日志查询条件和内存排查步骤。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-7b7fd20f2ad44a0c3f70d9e1"],
+    "expectedEvidence": "内存持续缓慢上升且 Full GC 后无法释放的泄漏特征。",
+    "decisionRule": "Top-K 必须命中内存泄漏 Chunk。"
   },
   {
-    "id": "memory-jmap",
+    "id": "memory-step-oom-logs",
+    "category": "troubleshooting-step",
+    "query": "应用出现 OutOfMemoryError 和 GC overhead，要查哪类应用日志",
+    "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
+    "expectedChunkIds": ["chunk-c194952690f4748757d10da1"],
+    "expectedEvidence": "application-logs 中查询 OutOfMemoryError 或 GC overhead。",
+    "decisionRule": "Top-K 必须命中内存排查步骤3的应用日志查询 Chunk。"
+  },
+  {
+    "id": "memory-step-jmap-dump",
+    "category": "troubleshooting-step",
     "query": "怎样用 jmap 生成 heap.hprof 堆快照",
     "expectedDocumentIds": ["doc-184fe84cc86bdb9910db"],
-    "expectedEvidence": "jmap -dump 命令和重启前保留快照。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 内存使用率过高告警处理方案。"
+    "expectedChunkIds": ["chunk-6bd767e4e4646f198324f493"],
+    "expectedEvidence": "jmap -dump:format=b,file=heap.hprof 命令。",
+    "decisionRule": "Top-K 必须命中生成堆转储文件 Chunk。"
   },
   {
-    "id": "service-health-check",
-    "query": "服务健康检查全部失败，错误率已经超过50%",
+    "id": "service-alert-original",
+    "category": "alert-original",
+    "query": "ServiceUnavailable：健康检查失败或错误率超过50%",
     "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
-    "expectedEvidence": "ServiceUnavailable 的触发条件和状态日志排查。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
+    "expectedChunkIds": ["chunk-4725225aba6d608a1b83917b"],
+    "expectedEvidence": "ServiceUnavailable 名称、健康检查失败和错误率超过50%的条件。",
+    "decisionRule": "Top-K 必须命中服务不可用告警名称 Chunk。"
   },
   {
-    "id": "service-dependency",
-    "query": "服务不可用，想确认 database redis 和 mq 依赖是否正常",
+    "id": "service-colloquial-all-down",
+    "category": "colloquial",
+    "query": "接口全挂了，健康检查一片红，用户完全进不去",
     "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
-    "expectedEvidence": "检查依赖服务状态的日志查询条件。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
+    "expectedChunkIds": ["chunk-7396881d68063b860624abd2"],
+    "expectedEvidence": "所有实例无法响应且健康检查全部失败的应用崩溃场景。",
+    "decisionRule": "Top-K 必须命中服务不可用 SOP 的应用崩溃 Chunk。"
+  },
+  {
+    "id": "service-step-dependencies",
+    "category": "troubleshooting-step",
+    "query": "服务不可用时怎样检查 database、redis 和 mq 下游依赖",
+    "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
+    "expectedChunkIds": ["chunk-899ad13f1d5f233d082b68bb"],
+    "expectedEvidence": "查询 application-logs 中 downstream_service、database、redis、mq。",
+    "decisionRule": "Top-K 必须命中检查依赖服务状态的排查步骤 Chunk。"
   },
   {
     "id": "service-release-rollback",
-    "query": "新版本发布后所有实例无法响应，需要回滚稳定版本",
+    "category": "similar-sop",
+    "query": "新版本发布后所有实例都无法响应，需要回到上一个稳定版本",
     "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
-    "expectedEvidence": "应用崩溃或无法启动时的回滚和恢复建议。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务不可用告警处理方案。"
+    "expectedChunkIds": ["chunk-7396881d68063b860624abd2"],
+    "expectedEvidence": "新版本发布后全部故障时回滚稳定版本。",
+    "decisionRule": "Top-K 必须命中服务不可用 SOP 的应用崩溃与回滚 Chunk。"
   },
   {
-    "id": "slow-p99",
-    "query": "接口 P99 响应时间过长，请求超时明显增加",
+    "id": "service-similar-oom-outage",
+    "category": "similar-sop",
+    "query": "服务已经不可用，同时机器内存不足并出现 OOM，先查资源耗尽场景",
+    "expectedDocumentIds": ["doc-8a0cb13b4f7374ce31cc"],
+    "expectedChunkIds": ["chunk-b3922ff1100f13e5dde4ad13"],
+    "expectedEvidence": "服务不可用 SOP 中资源耗尽包含内存不足导致 OOM。",
+    "decisionRule": "以服务不可用为主问题，Top-K 必须命中服务不可用的资源耗尽 Chunk，而不只命中内存 SOP。"
+  },
+  {
+    "id": "slow-alert-original",
+    "category": "alert-original",
+    "query": "SlowResponse：P99响应时间持续5分钟超过3秒",
     "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
-    "expectedEvidence": "响应时间指标、超时现象和性能排查。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+    "expectedChunkIds": ["chunk-4efc966828f5286791a9f177"],
+    "expectedEvidence": "SlowResponse 名称和 P99 持续5分钟超过3秒的触发条件。",
+    "decisionRule": "Top-K 必须命中慢响应告警名称 Chunk。"
+  },
+  {
+    "id": "slow-colloquial-p99",
+    "category": "colloquial",
+    "query": "接口越来越慢，尾延迟已经三秒多，超时请求也变多了",
+    "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
+    "expectedChunkIds": ["chunk-4efc966828f5286791a9f177"],
+    "expectedEvidence": "P99 超过3秒的慢响应告警。",
+    "decisionRule": "Top-K 必须命中慢响应告警 Chunk。"
   },
   {
     "id": "slow-sql-n-plus-one",
-    "query": "数据库慢查询并且可能存在 N+1 查询问题",
+    "category": "similar-sop",
+    "query": "接口慢，数据库有慢查询，而且代码可能存在 N+1 查询",
     "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
-    "expectedEvidence": "数据库慢查询、索引和 N+1 检查项。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+    "expectedChunkIds": [
+      "chunk-3df7a052230e28d3bc2eb142",
+      "chunk-3b588dd5f5fb9062e7b50808"
+    ],
+    "expectedEvidence": "数据库慢查询原因分析以及 N+1 性能检查项。",
+    "decisionRule": "Top-3 应覆盖慢查询原因 Chunk 和含 N+1 的检查清单 Chunk。"
   },
   {
-    "id": "slow-external-api",
-    "query": "外部 API 调用耗时过长且没有合理超时设置",
+    "id": "slow-external-api-timeout",
+    "category": "similar-sop",
+    "query": "第三方 API 响应很慢，HTTP 客户端还没有连接和读取超时",
     "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
-    "expectedEvidence": "外部 API 调用、超时设置和性能优化检查。",
-    "decisionRule": "Top-K Chunk 中至少一个属于 服务响应时间过长告警处理方案。"
+    "expectedChunkIds": ["chunk-498af4258a2044d87be7c8f2"],
+    "expectedEvidence": "外部 API 调用超时以及连接、读取超时设置。",
+    "decisionRule": "Top-K 必须命中慢响应 SOP 的外部 API 调用超时 Chunk。"
+  },
+  {
+    "id": "slow-step-system-resources",
+    "category": "troubleshooting-step",
+    "query": "响应时间过长时怎样同时查询 cpu、memory 和 disk io 指标",
+    "expectedDocumentIds": ["doc-5d98b18e456ad5b295cf"],
+    "expectedChunkIds": ["chunk-61e29088586e6beeaa2c14e2"],
+    "expectedEvidence": "慢响应排查步骤中查询 system-metrics 的 CPU、内存和磁盘 IO。",
+    "decisionRule": "Top-K 必须命中慢响应排查步骤4的系统资源查询 Chunk。"
   },
   {
     "id": "no-match-gpu-xid",
+    "category": "no-match",
     "query": "GPU 出现 Xid 79 并从 PCIe 总线掉线",
     "expectedDocumentIds": [],
+    "expectedChunkIds": [],
     "expectedEvidence": "当前五篇源文档没有 GPU Xid SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   },
   {
     "id": "no-match-certificate",
+    "category": "no-match",
     "query": "TLS 证书即将过期如何续签",
     "expectedDocumentIds": [],
+    "expectedChunkIds": [],
     "expectedEvidence": "当前五篇源文档没有证书续签 SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   },
   {
     "id": "no-match-ntp",
+    "category": "no-match",
     "query": "NTP 时钟不同步导致服务器时间漂移",
     "expectedDocumentIds": [],
+    "expectedChunkIds": [],
     "expectedEvidence": "当前五篇源文档没有 NTP SOP。",
+    "decisionRule": "Top-3 返回空结果才算正确拒识。"
+  },
+  {
+    "id": "no-match-kafka-lag",
+    "category": "no-match",
+    "query": "Kafka consumer group lag 持续增长，offset 提交失败",
+    "expectedDocumentIds": [],
+    "expectedChunkIds": [],
+    "expectedEvidence": "当前五篇源文档没有 Kafka 消费积压 SOP。",
+    "decisionRule": "Top-3 返回空结果才算正确拒识。"
+  },
+  {
+    "id": "no-match-kubernetes-image",
+    "category": "no-match",
+    "query": "Kubernetes Pod 出现 ImagePullBackOff，私有镜像拉取失败",
+    "expectedDocumentIds": [],
+    "expectedChunkIds": [],
+    "expectedEvidence": "当前五篇源文档没有 Kubernetes 镜像拉取 SOP。",
     "decisionRule": "Top-3 返回空结果才算正确拒识。"
   }
 ]

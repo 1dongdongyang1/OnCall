@@ -116,23 +116,17 @@ npm test
 npm run test:data-source
 ```
 
-构建统一 Chunk 数据以及 Keyword、TF-IDF 索引，或基于同一 Chunk 数据构建 Embedding 索引：
+先构建统一 Chunk 数据以及 Keyword、TF-IDF 索引，再基于这份已经持久化的 Chunk 数据构建 Embedding 索引：
 
 ```powershell
 npm run build:rag-index
 npm run build:embedding-index
 ```
 
-运行检索评测。命令会先从当前 `sops/` 生成一份统一 Chunk 数据，再据此重建 Keyword、TF-IDF、Embedding 三套索引并计算指标；README 不保存预计算结果。首次运行会下载并缓存固定 revision 的多语言 Embedding 模型：
+运行检索评测。命令会先从当前 `sops/` 生成一份统一 Chunk 数据，再据此重建 Keyword、TF-IDF、Embedding 三套索引，计算文档级与证据 Chunk 级 Recall@1/Recall@3、no-match accuracy 和耗时，并输出每条查询的 Top-3、分数与命中情况。可复现的现场报告写入 `reports/retrieval-evaluation.md`；README 不保存预计算结果。首次运行会下载并缓存固定 revision 的多语言 Embedding 模型：
 
 ```powershell
 npm run eval:retrieval
-```
-
-需要查看每条查询的实际排名和分数时：
-
-```powershell
-npx tsx src/rag/evaluate-retrieval.ts --details
 ```
 
 显式运行第一个真实模型验收场景：

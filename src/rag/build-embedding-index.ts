@@ -1,13 +1,12 @@
 import { resolve } from "node:path";
-import { buildChunkStore } from "./chunk-store.js";
+import { loadChunkStore } from "./chunk-store.js";
 import { HuggingFaceEmbedder } from "./embedder.js";
 import { buildLocalEmbeddingIndex } from "./local-embedding-index.js";
 
-const sopDirectory = resolve("sops");
 const chunkStorePath = resolve(".rag-index", "sop-chunks.json");
 const indexPath = resolve(".rag-index", "sop-embedding-index.json");
 const embedder = new HuggingFaceEmbedder();
-const store = await buildChunkStore(sopDirectory, chunkStorePath);
+const store = await loadChunkStore(chunkStorePath);
 const index = await buildLocalEmbeddingIndex(chunkStorePath, indexPath, embedder);
 
 process.stdout.write(

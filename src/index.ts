@@ -28,7 +28,7 @@ await buildLocalTfidfIndex(chunkStorePath, tfidfIndexPath);
 
 const agent = createOpsAgent({
   diskInspectionSource: mockDiskInspectionSource,
-  sopSource: new LocalTfidfSopSource(tfidfIndexPath),
+  sopSource: new LocalTfidfSopSource(tfidfIndexPath, chunkStorePath),
 });
 
 let toolCallCount = 0;

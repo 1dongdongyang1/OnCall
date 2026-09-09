@@ -57,11 +57,18 @@ function stripFrontmatter(markdown: string): string {
 }
 
 function readTitle(sourcePath: string, markdown: string): string {
-  const title = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  if (!title) {
-    throw new Error(`SOP 文档缺少一级标题：${sourcePath}`);
+  let insideCodeFence = false;
+  for (const line of markdown.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      insideCodeFence = !insideCodeFence;
+      continue;
+    }
+    const title = insideCodeFence ? undefined : line.match(/^#\s+(.+)$/)?.[1]?.trim();
+    if (title) {
+      return title;
+    }
   }
-  return title;
+  throw new Error(`SOP 文档缺少一级标题：${sourcePath}`);
 }
 
 function createDocumentId(title: string): string {
@@ -119,7 +126,8 @@ function chunkDocument(
     sourcePath,
     contentHash: hash(normalized),
   };
-  const headingPath: string[] = [];
+  let headingPath: string[] = [];
+  const headingsByLevel = new Map<number, string>();
   const sections: Array<{ headingPath: string[]; lines: string[] }> = [];
   let currentLines: string[] = [];
   let insideCodeFence = false;
@@ -146,8 +154,15 @@ function chunkDocument(
     flushSection();
     const level = heading[1]?.length ?? 1;
     const headingText = heading[2]?.trim() ?? "";
-    headingPath.length = Math.max(0, level - 1);
-    headingPath[level - 1] = headingText;
+    for (const existingLevel of headingsByLevel.keys()) {
+      if (existingLevel >= level) {
+        headingsByLevel.delete(existingLevel);
+      }
+    }
+    headingsByLevel.set(level, headingText);
+    headingPath = [...headingsByLevel.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, text]) => text);
   }
   flushSection();
 
@@ -217,7 +232,69 @@ export async function buildChunkStore(
 }
 
 export async function loadChunkStore(path: string): Promise<ChunkStore> {
-  return JSON.parse(await readFile(path, "utf8")) as ChunkStore;
+  const store = JSON.parse(await readFile(path, "utf8")) as ChunkStore;
+  validateChunkStore(store);
+  return store;
+}
+
+export function validateChunkStore(store: ChunkStore): void {
+  if (
+    store.formatVersion !== 1 ||
+    store.chunking?.strategy !== "markdown-heading-paragraph" ||
+    !Number.isInteger(store.chunking.maxCharacters) ||
+    store.chunking.maxCharacters <= 0 ||
+    !Array.isArray(store.documents) ||
+    !Array.isArray(store.chunks)
+  ) {
+    throw new Error("ChunkStore 格式或分块配置无效");
+  }
+
+  const documentsById = new Map(store.documents.map((document) => [document.documentId, document]));
+  if (documentsById.size !== store.documents.length) {
+    throw new Error("ChunkStore 包含重复 documentId");
+  }
+  for (const document of store.documents) {
+    if (
+      document.documentId !== createDocumentId(document.title) ||
+      !document.sourcePath ||
+      !/^[a-f0-9]{64}$/.test(document.contentHash)
+    ) {
+      throw new Error(`ChunkStore 文档元数据无效：${document.documentId}`);
+    }
+  }
+
+  const chunkIds = new Set<string>();
+  for (const chunk of store.chunks) {
+    const document = documentsById.get(chunk.documentId);
+    const expectedContentHash = hash(chunk.content);
+    const expectedChunkId = `chunk-${hash(
+      [chunk.documentId, chunk.headingPath.join(" > "), expectedContentHash].join("\0"),
+    ).slice(0, 24)}`;
+    if (
+      !document ||
+      chunk.documentTitle !== document.title ||
+      chunk.sourcePath !== document.sourcePath ||
+      !Array.isArray(chunk.headingPath) ||
+      chunk.headingPath.length === 0 ||
+      chunk.headingPath.some((heading) => typeof heading !== "string" || !heading) ||
+      !chunk.content ||
+      chunk.contentHash !== expectedContentHash ||
+      chunk.chunkId !== expectedChunkId
+    ) {
+      throw new Error(`ChunkStore Chunk 元数据或身份无效：${chunk.chunkId}`);
+    }
+    if (chunkIds.has(chunk.chunkId)) {
+      throw new Error(`ChunkStore 包含重复 chunkId：${chunk.chunkId}`);
+    }
+    chunkIds.add(chunk.chunkId);
+  }
+
+  const expectedCorpusHash = hash(
+    JSON.stringify({ documents: store.documents, chunks: store.chunks }),
+  );
+  if (store.corpusHash !== expectedCorpusHash) {
+    throw new Error("ChunkStore corpusHash 与持久化内容不一致");
+  }
 }
 
 function locationKey(chunk: SopChunk): string {
