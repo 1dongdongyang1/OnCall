@@ -2,6 +2,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { createOpsAgent } from "./agent/ops-agent.js";
+import {
+  diagnoseDiskAlert,
+  parseDiskAlertInput,
+  type DiskAlertInput,
+} from "./agent/disk-diagnosis.js";
 import { mockDiskInspectionSource } from "./mocks/mock-disk-inspection-source.js";
 import { buildChunkStore } from "./rag/chunk-store.js";
 import {
@@ -10,6 +15,9 @@ import {
 } from "./rag/local-tfidf-index.js";
 
 const prompt = process.argv.slice(2).join(" ") || "你好，请介绍一下自己。";
+const structuredAlert: DiskAlertInput | undefined = prompt.trim().startsWith("{")
+  ? parseDiskAlertInput(prompt)
+  : undefined;
 
 if (existsSync(".env")) {
   loadEnvFile(".env");
@@ -45,6 +53,7 @@ agent.subscribe((event) => {
   }
 
   if (
+    !structuredAlert &&
     event.type === "message_update" &&
     event.assistantMessageEvent.type === "text_delta"
   ) {
@@ -52,8 +61,19 @@ agent.subscribe((event) => {
   }
 });
 
-const run = await agent.prompt(prompt);
+const outcome = structuredAlert
+  ? await diagnoseDiskAlert(agent, structuredAlert)
+  : undefined;
+const run = outcome?.run ?? await agent.prompt(prompt);
 process.stdout.write("\n");
+
+if (outcome?.report) {
+  process.stdout.write(`[diagnostic-report] ${JSON.stringify(outcome.report, null, 2)}\n`);
+}
+if (outcome?.reportError) {
+  process.stderr.write(`[diagnostic-report-error] ${outcome.reportError}\n`);
+  process.exitCode = 1;
+}
 
 process.stdout.write(
   `[verification] terminationReason=${run.terminationReason} ` +

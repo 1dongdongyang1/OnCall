@@ -33,10 +33,11 @@ export function createListLargeDirectoriesTool(
       "只读列出指定节点、指定目录下占用最大的直接子项，并按大小降序返回。kind=directory 时可继续逐层列举，kind=file 时应调用 inspect_file；只有 inspectable=true 才能继续检查。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { node, path }, signal) => {
+    execute: async (toolCallId, { node, path }, signal) => {
       const result = await source.listLargeDirectories(node, path, signal);
       return createEvidenceToolResult({
         evidenceType: "现场证据" as const,
+        evidenceId: toolCallId,
         tool: "list_large_directories" as const,
         data: result,
       });

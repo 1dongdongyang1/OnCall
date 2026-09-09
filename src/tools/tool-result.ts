@@ -2,12 +2,14 @@ import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 
 export type MachineEvidencePayload<TData, TTool extends string = string> = {
   evidenceType: "现场证据";
+  evidenceId: string;
   tool: TTool;
   data: TData;
 };
 
 export type SopReferencePayload<TResult> = {
   evidenceType: "SOP 参考";
+  evidenceId: string;
   authorization: false;
   found: boolean;
   query: string;

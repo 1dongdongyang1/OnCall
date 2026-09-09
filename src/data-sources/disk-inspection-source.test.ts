@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mockDiskInspectionSource } from "../mocks/mock-disk-inspection-source.js";
+import {
+  createMockDiskInspectionSource,
+  mockDiskInspectionSource,
+} from "../mocks/mock-disk-inspection-source.js";
 
 test("Mock DiskInspectionSource 提供首个磁盘告警场景的固定证据", async () => {
   const diskUsage = await mockDiskInspectionSource.getDiskUsage("node-01");
@@ -21,6 +24,33 @@ test("Mock DiskInspectionSource 提供首个磁盘告警场景的固定证据", 
   assert.equal(logEntries.entries[0]?.kind, "file");
   assert.equal(file.sizeGb, 61);
   assert.ok(file.observations.includes("文件仍在持续写入"));
+});
+
+test("Mock 场景覆盖告警恢复、备份占用和工具失败", async () => {
+  const recovered = createMockDiskInspectionSource("recovered");
+  assert.equal(
+    (await recovered.getDiskUsage("node-recovered")).filesystems[0]?.usagePercent,
+    68,
+  );
+
+  const backup = createMockDiskInspectionSource("backup-occupation");
+  const backupDirectory = await backup.listLargeDirectories(
+    "node-backup",
+    "/data/backup",
+  );
+  assert.equal(backupDirectory.entries[0]?.kind, "file");
+  const backupFile = await backup.inspectFile(
+    "node-backup",
+    "/data/backup/full-20260909.bak",
+  );
+  assert.equal(backupFile.sizeGb, 166);
+  assert.match(backupFile.observations.join(" "), /保留策略/);
+
+  const failing = createMockDiskInspectionSource("directory-tool-failure");
+  await assert.rejects(
+    failing.listLargeDirectories("node-tool-failure", "/"),
+    /Mock 目录检查失败/,
+  );
 });
 
 test("Mock DiskInspectionSource 拒绝场景外的节点、目录和文件", async () => {

@@ -33,6 +33,9 @@ node-01 磁盘使用率 > 90%
 - 提供包含预期文档、预期证据和判定规则的检索评测集，可比较 Keyword、TF-IDF、Embedding 三种检索的 Recall@K 与 no-match accuracy。
 - 当前语料包含 CPU、内存、磁盘、服务不可用和响应时间过长五类 Markdown SOP。
 - 支持磁盘根分区使用率过高的首个固定诊断事件。
+- 支持带 `kind`、告警 ID、节点、挂载点、阈值和告警观测值的结构化磁盘告警输入，并输出结构化诊断报告。
+- 结构化报告的现场证据、SOP 依据和已执行检查由 Tool Result 与运行事件确定性生成；模型判断只能引用成功调用返回的 `evidenceId`。
+- 固定 Mock 场景覆盖告警生效、告警恢复、日志异常增长、备份占用、工具失败和 SOP 无匹配。
 - 运行时在工具执行前实施规范化参数去重与调用预算，并分别限制 Agent 总时长、模型轮数、单次模型请求和单次工具执行时间。
 - 输出明确终止原因、模型轮数、模型请求数、工具请求数、实际执行数以及 token/美元费用统计；上游未返回 usage 时标记为 `unavailable`。
 - Tool Result 使用类型化联合载荷区分“现场证据”和“SOP 参考”，SOP 参考固定携带 `authorization: false`。
@@ -108,6 +111,7 @@ npm start -- "node-01 根分区磁盘使用率超过90%，请排查并说明处�
 - 运行时控制测试：使用内存 Faux 模型验证预算、去重、超时、轮数、`isError`、usage 和安全终止；默认 `npm test` 会运行这一层。
 - 检索测试与评测：验证 Top-K、元数据和索引可重复构建，并从评测集实际计算检索指标；不调用大模型。
 - Agent 集成测试：注入同一个 Mock DataSource，但运行真实 DeepSeek，验证关键诊断行为、工具错误、安全边界和最终回答，不锁死完整调用路线；需要显式运行。
+- Agent 业务评测：使用同一组业务案例；`npm run test:business` 通过 Faux 模型确定性验证评测器和报告契约，真实 DeepSeek 验收仍由独立命令执行。
 
 执行默认测试（类型检查 + DataSource Mock + 运行时负向验收 + 离线检索测试）：
 
@@ -126,6 +130,20 @@ npm run test:data-source
 ```powershell
 npm run test:runtime
 ```
+
+运行不调用付费模型的磁盘 Agent 业务评测：
+
+```powershell
+npm run test:business
+```
+
+结构化磁盘告警可直接作为 CLI 的单个 JSON 参数传入，例如：
+
+```powershell
+npm start -- '{"kind":"disk_usage","alertId":"disk-alert-001","node":"node-01","mountPoint":"/","thresholdPercent":90,"observedPercent":92,"requestSopGuidance":true}'
+```
+
+输出中的 `diagnostic-report` 包含告警确认状态、诊断结论、现场证据、SOP 依据、已执行检查、处置建议以及人工升级结论。SOP 记录固定携带 `authorization: false`。
 
 先构建统一 Chunk 数据以及 Keyword、TF-IDF 索引，再基于这份已经持久化的 Chunk 数据构建 Embedding 索引：
 
@@ -162,6 +180,10 @@ OnCall/
 │  │  ├─ ops-agent.ts          # 组装模型、提示词和已启用工具
 │  │  ├─ ops-agent-runtime.ts  # 预算、去重、超时、轮数和 usage 控制
 │  │  ├─ ops-agent-runtime.test.ts # 运行时负向验收
+│  │  ├─ disk-diagnosis.ts      # 结构化告警、证据归并和诊断报告
+│  │  ├─ disk-diagnosis-eval-cases.ts # 磁盘 Agent 业务评测集
+│  │  ├─ disk-diagnosis-evaluator.ts # 行为与安全约束评测器
+│  │  ├─ disk-diagnosis.test.ts # 不调用付费模型的业务评测
 │  │  └─ system-prompt.ts      # OnCall Agent 系统提示词
 │  ├─ data-sources/
 │  │  ├─ disk-inspection-source.ts # 磁盘数据源接口和返回类型

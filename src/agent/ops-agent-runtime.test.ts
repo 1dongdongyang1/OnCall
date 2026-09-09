@@ -135,6 +135,7 @@ test("SOP Tool Result 使用带 authorization=false 的类型化参考载荷", a
   const result = await tool.execute("call-1", { query: "不存在的 SOP" });
   assert.deepEqual(result.details, {
     evidenceType: "SOP 参考",
+    evidenceId: "call-1",
     authorization: false,
     found: false,
     query: "不存在的 SOP",
@@ -256,6 +257,48 @@ test("工具超时通过 AbortSignal 中止并以 isError 安全结束", async (
     assert.equal(result.terminationReason, "tool_timeout");
     assert.equal(observedAbort, true);
     assert.equal(toolMessage?.role === "toolResult" && toolMessage.isError, true);
+    assertSafeForcedStop(agent, result);
+  } finally {
+    registration.unregister();
+  }
+});
+
+test("工具超时取消实际可中止操作且超时后不产生延迟副作用", async () => {
+  const registration = registerFauxProvider();
+  registration.setResponses([
+    fauxAssistantMessage(
+      fauxToolCall("get_disk_usage", { node: "node-01" }),
+      { stopReason: "toolUse" },
+    ),
+  ]);
+  let sideEffects = 0;
+  const agent = createRuntime(
+    registration,
+    createDiskSource({
+      getDiskUsage: async (_node, signal) =>
+        await new Promise<DiskUsage>((resolve, reject) => {
+          const operation = setTimeout(() => {
+            sideEffects += 1;
+            resolve(structuredClone(DISK_USAGE));
+          }, 80);
+          signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(operation);
+              reject(new Error("underlying operation aborted"));
+            },
+            { once: true },
+          );
+        }),
+    }),
+    { toolTimeoutMs: 20 },
+  );
+
+  try {
+    const result = await agent.prompt("测试超时后的工具副作用");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(result.terminationReason, "tool_timeout");
+    assert.equal(sideEffects, 0);
     assertSafeForcedStop(agent, result);
   } finally {
     registration.unregister();

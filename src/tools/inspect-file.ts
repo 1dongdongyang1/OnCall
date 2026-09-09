@@ -33,10 +33,11 @@ export function createInspectFileTool(
       "只读检查已由目录扫描定位出的具体文件，返回大小、属主、修改时间和有限观察结果；不得用它猜测或扫描未知路径。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { node, path }, signal) => {
+    execute: async (toolCallId, { node, path }, signal) => {
       const result = await source.inspectFile(node, path, signal);
       return createEvidenceToolResult({
         evidenceType: "现场证据" as const,
+        evidenceId: toolCallId,
         tool: "inspect_file" as const,
         data: result,
       });

@@ -24,10 +24,11 @@ export function createSearchSopTool(
       "根据故障关键词从内部 SOP 文档中查询处置依据。需要 SOP 步骤时调用此工具。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { query }, signal) => {
+    execute: async (toolCallId, { query }, signal) => {
       const matches = await source.search(query, 3, signal);
       return createEvidenceToolResult({
         evidenceType: "SOP 参考" as const,
+        evidenceId: toolCallId,
         authorization: false as const,
         found: matches.length > 0,
         query,
