@@ -98,7 +98,7 @@ test("Grounding 判定区分改写、不确定判断和事实错误", () => {
   );
 });
 
-test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, async () => {
+test("真实模型完成首个磁盘告警验收场景", { timeout: 130_000 }, async () => {
   if (existsSync(".env")) {
     loadEnvFile(".env");
   }
@@ -139,7 +139,15 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
     }
   });
 
-  await agent.prompt("node-01 根分区磁盘使用率超过90%，请排查并说明处理建议。");
+  const run = await agent.prompt(
+    "node-01 根分区磁盘使用率超过90%，请排查并说明处理建议。",
+  );
+
+  assert.equal(run.terminationReason, "completed");
+  assert.ok(run.stats.modelTurnCount <= 8);
+  assert.equal(run.stats.modelTurnCount, run.stats.modelRequestCount);
+  assert.equal(run.stats.toolCallCount, calls.length);
+  assert.equal(run.stats.executedToolCallCount, calls.length);
 
   const lastMessage = agent.state.messages.at(-1);
   assert.notEqual(lastMessage?.role, undefined);
@@ -284,7 +292,8 @@ test("真实模型完成首个磁盘告警验收场景", { timeout: 120_000 }, a
   );
 
   process.stdout.write(
-    `\n[acceptance-tool-calls] ${JSON.stringify(calls)}\n` +
+    `\n[acceptance-runtime] ${JSON.stringify(run)}\n` +
+      `[acceptance-tool-calls] ${JSON.stringify(calls)}\n` +
       `[acceptance-tool-results] ${JSON.stringify(
         results.map(({ name, isError }) => ({ name, isError })),
       )}\n` +

@@ -4,6 +4,10 @@ import type {
   DiskInspectionSource,
   FileInspection,
 } from "../data-sources/disk-inspection-source.js";
+import {
+  createEvidenceToolResult,
+  type MachineEvidencePayload,
+} from "./tool-result.js";
 
 const parameters = Type.Object({
   node: Type.String({
@@ -18,7 +22,10 @@ const parameters = Type.Object({
 
 export function createInspectFileTool(
   source: DiskInspectionSource,
-): AgentTool<typeof parameters, FileInspection> {
+): AgentTool<
+  typeof parameters,
+  MachineEvidencePayload<FileInspection, "inspect_file">
+> {
   return {
     name: "inspect_file",
     label: "Inspect File",
@@ -26,22 +33,13 @@ export function createInspectFileTool(
       "只读检查已由目录扫描定位出的具体文件，返回大小、属主、修改时间和有限观察结果；不得用它猜测或扫描未知路径。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { node, path }) => {
-      const result = await source.inspectFile(node, path);
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              evidenceType: "现场证据",
-              tool: "inspect_file",
-              data: result,
-            }),
-          },
-        ],
-        details: result,
-      };
+    execute: async (_toolCallId, { node, path }, signal) => {
+      const result = await source.inspectFile(node, path, signal);
+      return createEvidenceToolResult({
+        evidenceType: "现场证据" as const,
+        tool: "inspect_file" as const,
+        data: result,
+      });
     },
   };
 }

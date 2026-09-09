@@ -4,6 +4,10 @@ import type {
   DirectoryUsage,
   DiskInspectionSource,
 } from "../data-sources/disk-inspection-source.js";
+import {
+  createEvidenceToolResult,
+  type MachineEvidencePayload,
+} from "./tool-result.js";
 
 const parameters = Type.Object({
   node: Type.String({
@@ -18,7 +22,10 @@ const parameters = Type.Object({
 
 export function createListLargeDirectoriesTool(
   source: DiskInspectionSource,
-): AgentTool<typeof parameters, DirectoryUsage> {
+): AgentTool<
+  typeof parameters,
+  MachineEvidencePayload<DirectoryUsage, "list_large_directories">
+> {
   return {
     name: "list_large_directories",
     label: "List Large Directories",
@@ -26,22 +33,13 @@ export function createListLargeDirectoriesTool(
       "只读列出指定节点、指定目录下占用最大的直接子项，并按大小降序返回。kind=directory 时可继续逐层列举，kind=file 时应调用 inspect_file；只有 inspectable=true 才能继续检查。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { node, path }) => {
-      const result = await source.listLargeDirectories(node, path);
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              evidenceType: "现场证据",
-              tool: "list_large_directories",
-              data: result,
-            }),
-          },
-        ],
-        details: result,
-      };
+    execute: async (_toolCallId, { node, path }, signal) => {
+      const result = await source.listLargeDirectories(node, path, signal);
+      return createEvidenceToolResult({
+        evidenceType: "现场证据" as const,
+        tool: "list_large_directories" as const,
+        data: result,
+      });
     },
   };
 }

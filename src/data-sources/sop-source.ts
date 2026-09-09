@@ -10,5 +10,9 @@ export type SopSearchResult = {
 };
 
 export interface SopSource {
-  search(query: string, limit?: number): Promise<SopSearchResult[]>;
+  search(
+    query: string,
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<SopSearchResult[]>;
 }

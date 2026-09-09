@@ -13,7 +13,8 @@
 - `npm ci`：按 `package-lock.json` 安装精确版本依赖。
 - `npm start -- "node-01 根分区磁盘使用率超过90%，请排查并说明处理建议"`：使用输入提示运行 TypeScript CLI。
 - `npm run typecheck`：只做 TypeScript 类型检查，不生成文件。
-- `npm test`：运行类型检查、DataSource Mock 测试和离线检索测试，不调用付费大模型。
+- `npm test`：运行类型检查、DataSource Mock、运行时预算/去重/超时负向测试和离线检索测试，不调用付费大模型。
+- `npm run test:runtime`：只运行运行时预算、去重、Agent/模型/工具超时、模型轮数、`isError`、usage 与安全终止测试，使用内存 Faux 模型，不调用付费大模型。
 - `npm run test:data-source`：只运行 DataSource 层 Mock 测试。
 - `npm run test:retrieval`：验证统一 Chunk、稳定 ID、Top-K、三套索引元数据和可重复构建。
 - `npm run test:agent:acceptance`：使用真实 DeepSeek 运行 Agent 集成验收，可能产生 API 费用。
@@ -38,6 +39,8 @@
 1. DataSource 层测试只验证接口实现和固定 Mock 数据，不创建 Agent、不调用大模型。
 2. 检索测试验证统一 Chunk、稳定身份、Top-K 接口、排序、元数据保留、no-match 行为和索引可重复构建。
 3. Agent 集成测试注入受控 Mock DataSource，但使用真实大模型验证完整工具调用与回答行为，不能加入默认 `npm test`。
+
+运行时控制测试必须使用内存模型和可中止的受控工具，分别验证工具请求数与实际执行数、模型轮数与模型请求数、明确终止原因，以及 usage 缺失时返回 `unavailable`。重复调用、预算耗尽、工具异常或超时后不得再让模型补写未经证实的结论。
 
 Agent 验收应验证关键行为和安全约束，不得锁死模型的完整思考路线或固定整段调用数组。至少核对：工具名与参数、节点边界、必要证据、因果前置条件、重复调用、调用预算、`isError`、工具返回证据和最终回答。不能把看似合理的模型文字当作工具已经执行的证明。
 

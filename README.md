@@ -33,7 +33,9 @@ node-01 磁盘使用率 > 90%
 - 提供包含预期文档、预期证据和判定规则的检索评测集，可比较 Keyword、TF-IDF、Embedding 三种检索的 Recall@K 与 no-match accuracy。
 - 当前语料包含 CPU、内存、磁盘、服务不可用和响应时间过长五类 Markdown SOP。
 - 支持磁盘根分区使用率过高的首个固定诊断事件。
-- 输出工具名、调用参数、执行结果和调用次数，便于验证 Tool Calling。
+- 运行时在工具执行前实施规范化参数去重与调用预算，并分别限制 Agent 总时长、模型轮数、单次模型请求和单次工具执行时间。
+- 输出明确终止原因、模型轮数、模型请求数、工具请求数、实际执行数以及 token/美元费用统计；上游未返回 usage 时标记为 `unavailable`。
+- Tool Result 使用类型化联合载荷区分“现场证据”和“SOP 参考”，SOP 参考固定携带 `authorization: false`。
 - 通过 `.env` 管理 DeepSeek API Key。
 
 ## 当前边界
@@ -42,7 +44,7 @@ node-01 磁盘使用率 > 90%
 - Agent 运行入口当前注入 TF-IDF 检索；Embedding 检索先保留为离线对比项，尚未切换到 Agent，也未增加混合检索或重排。
 - 当前只输出诊断与处置建议，不会执行重启、隔离节点等变更操作。
 - 尚未接入监控告警、CMDB、工单系统或会话持久化。
-- `npm test` 运行类型检查、DataSource Mock 和离线检索测试，不会调用真实大模型或下载 Embedding 模型。
+- `npm test` 运行类型检查、DataSource Mock、运行时负向验收和离线检索测试，不会调用真实大模型或下载 Embedding 模型。
 
 ## 技术组成
 
@@ -93,18 +95,21 @@ npm start -- "node-01 根分区磁盘使用率超过90%，请排查并说明处�
 ```text
 [tool-call] name=search_sop args={"query":"GPU Xid 79 错误处理"}
 [tool-result] name=search_sop isError=false ...
-[verification] toolCallCount=1
+[verification] terminationReason=completed modelTurnCount=2 modelRequestCount=2 toolCallCount=1 executedToolCallCount=1 usage={...}
 ```
+
+默认运行时限制定义在 `src/agent/ops-agent-runtime.ts`：工具调用最多 10 次、模型最多 8 轮、Agent 总超时 120 秒、单次模型请求超时 45 秒、单次工具超时 10 秒。依赖注入时可以覆盖这些值，非正整数会被拒绝。
 
 ## 验证与构建
 
-验证分为三层：
+验证分为四层：
 
 - DataSource 层测试：只运行固定 Mock，不调用大模型、不产生 API 费用；默认 `npm test` 会运行这一层。
+- 运行时控制测试：使用内存 Faux 模型验证预算、去重、超时、轮数、`isError`、usage 和安全终止；默认 `npm test` 会运行这一层。
 - 检索测试与评测：验证 Top-K、元数据和索引可重复构建，并从评测集实际计算检索指标；不调用大模型。
 - Agent 集成测试：注入同一个 Mock DataSource，但运行真实 DeepSeek，验证关键诊断行为、工具错误、安全边界和最终回答，不锁死完整调用路线；需要显式运行。
 
-执行默认测试（类型检查 + DataSource Mock + 离线检索测试）：
+执行默认测试（类型检查 + DataSource Mock + 运行时负向验收 + 离线检索测试）：
 
 ```powershell
 npm test
@@ -114,6 +119,12 @@ npm test
 
 ```powershell
 npm run test:data-source
+```
+
+只运行不调用真实模型的运行时预算、去重、超时和终止测试：
+
+```powershell
+npm run test:runtime
 ```
 
 先构建统一 Chunk 数据以及 Keyword、TF-IDF 索引，再基于这份已经持久化的 Chunk 数据构建 Embedding 索引：
@@ -149,6 +160,8 @@ OnCall/
 ├─ src/
 │  ├─ agent/
 │  │  ├─ ops-agent.ts          # 组装模型、提示词和已启用工具
+│  │  ├─ ops-agent-runtime.ts  # 预算、去重、超时、轮数和 usage 控制
+│  │  ├─ ops-agent-runtime.test.ts # 运行时负向验收
 │  │  └─ system-prompt.ts      # OnCall Agent 系统提示词
 │  ├─ data-sources/
 │  │  ├─ disk-inspection-source.ts # 磁盘数据源接口和返回类型
@@ -160,7 +173,8 @@ OnCall/
 │  │  ├─ search-sop.ts         # SOP Tool 与数据源调用
 │  │  ├─ inspect-disk.ts       # 磁盘使用率 Tool 与数据源调用
 │  │  ├─ inspect-directory.ts  # 大目录 Tool 与数据源调用
-│  │  └─ inspect-file.ts       # 具体文件只读检查 Tool
+│  │  ├─ inspect-file.ts       # 具体文件只读检查 Tool
+│  │  └─ tool-result.ts        # 现场证据与 SOP 参考联合类型
 │  ├─ rag/
 │  │  ├─ retriever.ts          # 通用 Top-K 检索结果契约
 │  │  ├─ chunk-store.ts        # Markdown → 稳定 ID 的统一 Chunk 数据

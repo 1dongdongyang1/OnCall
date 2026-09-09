@@ -31,11 +31,8 @@ const agent = createOpsAgent({
   sopSource: new LocalTfidfSopSource(tfidfIndexPath, chunkStorePath),
 });
 
-let toolCallCount = 0;
-
 agent.subscribe((event) => {
   if (event.type === "tool_execution_start") {
-    toolCallCount += 1;
     process.stdout.write(
       `\n[tool-call] name=${event.toolName} args=${JSON.stringify(event.args)}\n`,
     );
@@ -55,12 +52,17 @@ agent.subscribe((event) => {
   }
 });
 
-await agent.prompt(prompt);
+const run = await agent.prompt(prompt);
 process.stdout.write("\n");
 
-const lastMessage = agent.state.messages.at(-1);
-if (lastMessage?.role === "assistant" && lastMessage.stopReason === "error") {
-  throw new Error(lastMessage.errorMessage || "DeepSeek 请求失败");
+process.stdout.write(
+  `[verification] terminationReason=${run.terminationReason} ` +
+    `modelTurnCount=${run.stats.modelTurnCount} ` +
+    `modelRequestCount=${run.stats.modelRequestCount} ` +
+    `toolCallCount=${run.stats.toolCallCount} ` +
+    `executedToolCallCount=${run.stats.executedToolCallCount} ` +
+    `usage=${JSON.stringify(run.stats.usage)}\n`,
+);
+if (run.terminationReason !== "completed") {
+  process.exitCode = 1;
 }
-
-process.stdout.write(`[verification] toolCallCount=${toolCallCount}\n`);

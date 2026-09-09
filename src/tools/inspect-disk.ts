@@ -4,6 +4,10 @@ import type {
   DiskInspectionSource,
   DiskUsage,
 } from "../data-sources/disk-inspection-source.js";
+import {
+  createEvidenceToolResult,
+  type MachineEvidencePayload,
+} from "./tool-result.js";
 
 const parameters = Type.Object({
   node: Type.String({
@@ -14,7 +18,10 @@ const parameters = Type.Object({
 
 export function createGetDiskUsageTool(
   source: DiskInspectionSource,
-): AgentTool<typeof parameters, DiskUsage> {
+): AgentTool<
+  typeof parameters,
+  MachineEvidencePayload<DiskUsage, "get_disk_usage">
+> {
   return {
     name: "get_disk_usage",
     label: "Get Disk Usage",
@@ -22,22 +29,13 @@ export function createGetDiskUsageTool(
       "读取各文件系统的容量和使用率。收到磁盘容量告警时必须先调用此工具。",
     parameters,
     executionMode: "sequential",
-    execute: async (_toolCallId, { node }) => {
-      const result = await source.getDiskUsage(node);
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              evidenceType: "现场证据",
-              tool: "get_disk_usage",
-              data: result,
-            }),
-          },
-        ],
-        details: result,
-      };
+    execute: async (_toolCallId, { node }, signal) => {
+      const result = await source.getDiskUsage(node, signal);
+      return createEvidenceToolResult({
+        evidenceType: "现场证据" as const,
+        tool: "get_disk_usage" as const,
+        data: result,
+      });
     },
   };
 }

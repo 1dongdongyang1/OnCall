@@ -30,7 +30,15 @@ export type FileInspection = {
 };
 
 export interface DiskInspectionSource {
-  getDiskUsage(node: string): Promise<DiskUsage>;
-  listLargeDirectories(node: string, path: string): Promise<DirectoryUsage>;
-  inspectFile(node: string, path: string): Promise<FileInspection>;
+  getDiskUsage(node: string, signal?: AbortSignal): Promise<DiskUsage>;
+  listLargeDirectories(
+    node: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<DirectoryUsage>;
+  inspectFile(
+    node: string,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<FileInspection>;
 }
